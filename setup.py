@@ -25,7 +25,7 @@ def get_long_description():
 
 setup(
     name='fedex_generator',
-    version=get_version(),
+    version=1.0.0,#get_version(),
     package_dir={'': 'src'},
     packages=find_packages(where='src'),
     long_description_content_type="text/markdown",
