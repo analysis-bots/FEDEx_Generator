@@ -1,46 +1,97 @@
 import pandas as pd
+from typing import List, Any, Hashable
 from fedex_generator.commons import utils
 
 
 class Bin(object):
-    def __init__(self, source_column, result_column, name):
+    """
+    Base class for all binning methods.
+    """
+    def __init__(self, source_column: pd.Series, result_column: pd.Series, name: str):
+        """
+        :param source_column: The source column to bin.
+        :param result_column: The result column to bin.
+        :param name: The name of the binning method.
+        """
         self.source_column, self.result_column = source_column, result_column
         self.name = name
 
-    def get_binned_source_column(self):
+    def get_binned_source_column(self) -> pd.Series:
+        """
+        Get the bin's source column.
+        :return: The source column.
+        """
         return self.source_column
 
-    def get_binned_result_column(self):
+    def get_binned_result_column(self) -> pd.Series:
+        """
+        Get the bin's result column.
+        :return: The result column.
+        """
         return self.result_column
 
-    def get_source_by_values(self, values):
+    def get_source_by_values(self, values) -> pd.Series | None:
+        """
+        Get values from the source column by the given values.
+        :param values: The values to get from the source column.
+        :return: A series with the values from the source column, or None if the source column is None.
+        """
         source_column = self.get_binned_source_column()
         if source_column is None:
             return None
 
         return source_column[source_column.isin(values)]
 
-    def get_result_by_values(self, values):
+    def get_result_by_values(self, values) -> pd.Series:
+        """
+        Get values from the result column by the given values.
+        :param values: The values to get from the result column.
+        :return: A series with the values from the result column.
+        """
         result_column = self.get_binned_result_column()
         return result_column[result_column.isin(values)]
 
-    def get_bin_values(self):
+    def get_bin_values(self) -> List[Any]:
+        """
+        Get the values of the bin, sorted and without NaN values.
+        :return: A list of the values of the bin.
+        """
+        # Get the source and result columns
         source_col = self.get_binned_source_column()
         source_col = [] if source_col is None else source_col
         res_col = self.get_binned_result_column()
+
+        # Create a list of the unique values in the source and result columns, then sort it
         values = list(set(source_col).union(set(res_col)))
         values.sort()
 
+        # Return the values after dropping any NaN values
         return list(utils.drop_nan(values))
 
     def get_bin_name(self):
+        """
+        Get the name of the bin.
+        The name of the bin is the name of the result column.
+        :return: The name of the bin.
+        """
         return self.result_column.name
 
     def get_bin_representation(self, item):
+        """
+        Get a bin representation of an item.
+        The representation is the item formatted as a string via the :func:`fedex_generator.commons.utils.format_bin_item` method.
+
+        :param item: The item to format.
+        :return: The formatted item
+        """
         return utils.format_bin_item(item)
 
 
 class UserBin(Bin):
+    """
+    Base class for user-defined binning methods.
+    This is an abstract class and should not be instantiated directly.
+    """
     def __init__(self, source_column, result_column):
         super().__init__(source_column, result_column, "UserDefined")
 
@@ -58,7 +109,15 @@ class UserBin(Bin):
 
 
 class MultiIndexBin(Bin):
+    """
+    A binning method for multi-index columns.
+    """
     def __init__(self, source_column, result_column, level_index):
+        """
+        :param source_column: The source column to bin.
+        :param result_column: The result column to bin.
+        :param level_index: The index of the level to bin
+        """
         super().__init__(source_column, result_column, "MultiIndexBin")
         self.level_index = level_index
 
@@ -71,16 +130,29 @@ class MultiIndexBin(Bin):
     def get_result_by_values(self, values):
         return self.result_column[self.result_column.index.isin(values, level=self.level_index)]
 
-    def get_bin_values(self):
+    def get_bin_values(self) -> List[Any]:
+        """
+        :return: A list of the values of the result column at the level index.
+        """
         return list(self.result_column.index.levels[self.level_index])
 
-    def get_base_name(self):
+    def get_base_name(self) -> str:
+        """
+        :return: The name of the index at the level 0.
+        """
         return self.result_column.index.names[0]
 
-    def get_bin_name(self):
+    def get_bin_name(self) -> str:
+        """
+        :return: The name of the index at the level index.
+        """
         return self.result_column.index.names[self.level_index]
 
-    def get_value_name(self):
+    def get_value_name(self) -> Hashable:
+        """
+        Gets the name of the value, in this case the name of the result column.
+        :return: The name of the result column.
+        """
         return self.result_column.name
 
 
