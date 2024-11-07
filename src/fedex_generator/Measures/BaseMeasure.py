@@ -80,7 +80,7 @@ def draw_histogram(items_before: list, items_after: list, label: str, title) -> 
 class BaseMeasure(object):
     """
     Base class for all measures. Contains the basic methods for calculating the measure and building the explanation.
-    Inherit from this class to create a new measure, and implement the abstract methods.
+    Inherit from this class to create a new measure, and implement the abstract methods.\n
     """
 
     def __init__(self):
@@ -178,7 +178,7 @@ class BaseMeasure(object):
     def calc_measure_internal(self, _bin: Bin) -> float:
         """
         Calculate the measure score for a bin.
-        This is an abstract method, and should be implemented by the inheriting class.
+        This is an abstract method, and should be implemented by the inheriting class for the specific measure.
         :param _bin: The bin object.
         :return: The measure score.
         """
@@ -216,7 +216,16 @@ class BaseMeasure(object):
     def calc_influence_col(self, current_bin: Bin) -> List[float]:
         """
         Calculate the influence of the column in the current bin.
-        This is an abstract method, and should be implemented by the inheriting class.
+        This is an abstract method, and should be implemented by the inheriting class.\n
+        For FEDEX, the influence of a set of rows is defined as:\n
+        .. math:: I_A (d_{in}, q, d_{out}) - I_A (d_{in} - R, q, d_{out}')\n
+        Where:\n
+        - :math:`I_A (d_{in}, q, d_{out})` is the measure score of the column A in the current bin.
+        - :math:`d_{in}` is the input dataframe.
+        - :math:`d_{out}` is the output dataframe.
+        - :math:`q` is the query.
+        - :math:`R` is the set of rows in the current bin.
+        - :math:`d_{out}'` is the output dataframe after removing the rows in the current bin.
         :param current_bin: The current bin object.
         :return: A list of influence values.
         """
