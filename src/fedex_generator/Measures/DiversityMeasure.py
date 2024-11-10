@@ -122,6 +122,7 @@ class DiversityMeasure(BaseMeasure):
     - :math:`\\tilde{a}` is the mean of the values of attribute A.\n
     - :math:`a_i` is the i-th value of attribute A in the output dataframe.\n
      """
+
     def __init__(self):
         super().__init__()
 
@@ -256,8 +257,8 @@ class DiversityMeasure(BaseMeasure):
     def interestingness_only_explanation(self, source_col: Series, result_col: Series, col_name: str) -> str:
         return f"After employing the GroupBy operation we can see highly diverse set of values in the column '{col_name}'\n" \
                f"The variance" + \
-               (f" was {self.calc_var(source_col)} and now it " if source_col is not None else "") + \
-               f" is {self.calc_var(result_col)}"
+            (f" was {self.calc_var(source_col)} and now it " if source_col is not None else "") + \
+            f" is {self.calc_var(result_col)}"
 
     def calc_influence_col(self, current_bin: Bin):
         # Get the values of the current bin

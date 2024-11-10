@@ -14,6 +14,7 @@ class Bin(object):
     """
     Base class for all binning methods.
     """
+
     def __init__(self, source_column: pd.Series, result_column: pd.Series, name: str):
         """
         :param source_column: The source column to bin.
@@ -99,6 +100,7 @@ class UserBin(Bin):
     Base class for user-defined binning methods.
     This is an abstract class and should not be instantiated directly.
     """
+
     def __init__(self, source_column: Series, result_column: Series):
         super().__init__(source_column, result_column, "UserDefined")
 
@@ -119,6 +121,7 @@ class MultiIndexBin(Bin):
     """
     A binning method for multi-index columns.
     """
+
     def __init__(self, source_column: Series, result_column: Series, level_index: int):
         """
         :param source_column: The source column to bin.
@@ -168,6 +171,7 @@ class NumericBin(Bin):
     A binning method for numeric columns.
     Automatically manages the binning of the columns based on the provided size.
     """
+
     def __init__(self, source_column: Series, result_column: Series, size: int):
         """
         :param source_column: pd.Series - The column to bin in the source dataframe.
@@ -267,6 +271,7 @@ class NoBin(Bin):
     A bin for when no binning is required, but the columns should still be treated as binned
     for the purpose of not getting an error.
     """
+
     def __init__(self, source_column, result_column):
         super().__init__(source_column, result_column, "NoBin")
 
@@ -276,6 +281,7 @@ class Bins(object):
     A class to manage the binning of columns, using the provided binning methods.
     Automatically selects the appropriate binning method based on the column type.
     """
+
     @staticmethod
     def default_binning_method(source_column: Series, result_column: Series) -> list:
         """
@@ -299,7 +305,7 @@ class Bins(object):
         """
         self.max_bin_count = bins_count
         self.bins = list(Bins.USER_BINNING_METHOD(source_column, result_column))
-        gb=False
+        gb = False
         if Bins.ONLY_USER_BINS:
             return
 
@@ -307,7 +313,7 @@ class Bins(object):
         # Additionally, if there are multi-level indexes, we return
         if source_column is None:
             # GroupBy
-            gb=True
+            gb = True
             self.bins += self.get_multi_index_bins(source_column, result_column, bins_count)
             if len(self.bins) > 0:
                 return

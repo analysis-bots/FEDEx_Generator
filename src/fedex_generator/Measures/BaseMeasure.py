@@ -11,8 +11,12 @@ from fedex_generator.Measures.Bins import Bins, Bin
 from fedex_generator.commons.consts import SIGNIFICANCE_THRESHOLD, TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
 from fedex_generator.commons.utils import is_numeric, to_valid_latex
 
-from FEDEx_Generator.src.fedex_generator.Operations.Operation import Operation
-from FEDEx_Generator.src.fedex_generator.commons.DatasetRelation import DatasetRelation
+try:
+    from FEDEx_Generator.src.fedex_generator.Operations.Operation import Operation
+    from FEDEx_Generator.src.fedex_generator.commons.DatasetRelation import DatasetRelation
+except:
+    from fedex_generator.Operations.Operation import Operation
+    from fedex_generator.commons.DatasetRelation import DatasetRelation
 
 # Sets some parameters for the plots. Usage of latex is optional, and is currently set to False by default.
 usetex = False  # matplotlib.checkdep_usetex(True)
@@ -115,7 +119,8 @@ class BaseMeasure(object):
 
         return source_col, res_col
 
-    def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore:list=[]) -> Dict[str, float]:
+    def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore: list = []) -> \
+    Dict[str, float]:
         """
         Calculate the measure for each attribute in the operation_object.
 
@@ -261,7 +266,7 @@ class BaseMeasure(object):
         max_influences = influence_vals_max_indexes[-k:][::-1]
         return max_indices, max_influences
 
-    def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title:str=None, ax=None, score=None,
+    def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title: str = None, ax=None, score=None,
                  show_scores: bool = False) -> None:
         """
         Draw a bar plot for the given bin item and influence values.

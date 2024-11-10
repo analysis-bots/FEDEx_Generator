@@ -8,7 +8,6 @@ from fedex_generator.Measures.BaseMeasure import BaseMeasure, START_BOLD, END_BO
 from fedex_generator.Measures.Bins import Bin
 
 
-
 class ExceptionalityMeasure(BaseMeasure):
     """
     A class implementing the Exceptionality measure, a measure for interestingness of filter / join / union operations.\n
@@ -29,6 +28,7 @@ class ExceptionalityMeasure(BaseMeasure):
     - :math:`\\Pr(d_{in})` is the probability distribution of the input dataframe.\n
     - :math:`\\Pr(d_{out})` is the probability distribution of the output dataframe.\n
     """
+
     def __init__(self):
         super().__init__()
 
@@ -91,7 +91,6 @@ class ExceptionalityMeasure(BaseMeasure):
         ax.set_xlabel(utils.to_valid_latex(bin_item.get_bin_name() + " values"), fontsize=20)
         ax.set_ylabel("frequency(\\%)", fontsize=16)
 
-
         # Set the title of the bar chart. If show_scores is True, display the score in the title
         if title is not None:
             if show_scores:
@@ -100,7 +99,7 @@ class ExceptionalityMeasure(BaseMeasure):
                 ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 14})
 
         ax.set_axis_on()
-        return bin_item.get_bin_name() ####
+        return bin_item.get_bin_name()  ####
 
     def interestingness_only_explanation(self, source_col, result_col, col_name):
         # If the column is categorical, compare the most common value before and after the operation
@@ -202,7 +201,7 @@ class ExceptionalityMeasure(BaseMeasure):
 
             # Compute the factor - the ratio between the probability of the value in the result column and the
             # probability of the value in the source column
-            factor = res_probs.get(max_value, 0) / source_probs[max_value]   
+            factor = res_probs.get(max_value, 0) / source_probs[max_value]
             proportion = "less" if factor < 1 else "more"
 
             # If the factor is between 0 and 1, then the value now appears less frequently, and we set the factor
@@ -216,7 +215,7 @@ class ExceptionalityMeasure(BaseMeasure):
                 additional_explanation.append(
                     f"{START_BOLD}{utils.to_valid_latex(col_name, True)}{END_BOLD} values "
                     f"{START_BOLD}{utils.to_valid_latex(values_range_str, True)}{END_BOLD}\n"
-                    f"are {START_BOLD}no{END_BOLD} {START_BOLD}longer{END_BOLD} {START_BOLD}exist{END_BOLD} (was {round(source_probs[max_value],3)*100}%)")
+                    f"are {START_BOLD}no{END_BOLD} {START_BOLD}longer{END_BOLD} {START_BOLD}exist{END_BOLD} (was {round(source_probs[max_value], 3) * 100}%)")
             else:
                 appear_test = f'{utils.smart_round(factor)} times {proportion}'
                 additional_explanation.append(
