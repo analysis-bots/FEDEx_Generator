@@ -106,9 +106,9 @@ def flatten_other_indexes(series, main_index):
 class DiversityMeasure(BaseMeasure):
     """
     A class implementing the diversity measure, a measure for interestingness of GroupBy operations.\n
-    This measure is described in the paper "FEDEX: An Explainability Framework for Data Exploration Steps" by
+    This measure is described in the article "FEDEX: An Explainability Framework for Data Exploration Steps" by
     Daniel Deutch, Amir Gilad, Tova Milo, Amit Mualem, Amit Somech.\n
-    From the paper: "intuitively, a group-by step that yields a dataframe with a highly diverse set of aggregated values,
+    From the article: "intuitively, a group-by step that yields a dataframe with a highly diverse set of aggregated values,
     implies a large difference between the groups".\n
     The measure is defined as the coefficient of variation: \n
     .. math:: I_A (d_{in}, q_g, d_{out}) = CV(d_{out}[A]) = \\frac{1}{\\tilde{a}} * \\sqrt{\\frac{\\sum_i (a_i - \\tilde{a})^2}{n}}\n
@@ -269,6 +269,7 @@ class DiversityMeasure(BaseMeasure):
 
         influence = []
         # Compute the diversity score for each value in the bin, then calculate the influence of each value
+        # as the difference between the score of all values and the score without the current value
         for value in bin_values:
             source_col_only_list = current_bin.get_source_by_values([b for b in bin_values if b != value])
             res_col_only_list = current_bin.get_result_by_values([b for b in bin_values if b != value])

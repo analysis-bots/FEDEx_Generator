@@ -227,7 +227,7 @@ class BaseMeasure(object):
         - :math:`R` is the set of rows in the current bin.
         - :math:`d_{out}'` is the output dataframe after removing the rows in the current bin.
         :param current_bin: The current bin object.
-        :return: A list of influence values.
+        :return: A list of influence values. Each value corresponds to a value in the bin.
         """
         raise NotImplementedError()
 
