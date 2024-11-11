@@ -27,7 +27,8 @@ def do_operation(a, b, op_str):
 
 class Filter(Operation.Operation):
     """
-    An implementation of the filter operation, fit for the explainability framework.
+    An implementation of the filter operation, fit for the explainability framework.\n
+        Provides a .explain() method for explaining the operation, as well as methods used for producing the explanation.
     """
 
     def __init__(self, source_df: DataFrame, source_scheme: dict, attribute: str = None,
@@ -103,7 +104,7 @@ class Filter(Operation.Operation):
         the specified attribute, or highly correlated with the specified attribute.
         It also skips attributes marked as 'i' in the source scheme.
 
-        :yield: A tuple containing the attribute name and a DatasetRelation object.
+        :yield: A tuple containing the attribute name and a DatasetRelation object with the source and result DF.
         """
         high_correlated_columns = self.get_correlated_attributes()
 

@@ -6,18 +6,38 @@ from fedex_generator.commons.DatasetRelation import DatasetRelation
 from fedex_generator.Operations import Operation
 from fedex_generator.Measures.NormalizedDiversityMeasure import NormalizedDiversityMeasure
 from fedex_generator.Measures.DiversityMeasure import DiversityMeasure
-from fedex_generator.Measures.OutlierMeasure import OutlierMeasure
+from fedex_generator.Measures.OutlierMeasure import OutlierMeasure, HIGH, LOW
+
+from typing import Generator, List, Tuple
 
 
 class GroupBy(Operation.Operation):
-    def __init__(self, source_df, source_scheme, group_attributes, agg_dict, result_df=None, source_name=None, operation=None):
+    """
+    Implementation of the GroupBy operation, fit for the FEDEx explainability framework.\n
+    Provides a .explain() method for explaining the operation, as well as methods used for producing the explanation.
+    """
+
+    def __init__(self, source_df, source_scheme, group_attributes, agg_dict, result_df=None, source_name=None,
+                 operation=None):
+        """
+        :param source_df: The source DataFrame, before the groupby operation.
+        :param source_scheme: The scheme of the source DataFrame.
+        :param group_attributes: The attributes to group by.
+        :param agg_dict: The aggregation dictionary.
+        :param result_df: The resulting DataFrame after the groupby operation.
+        :param source_name: The name of the source DataFrame.
+        :param operation: The operation to perform.
+        """
         super().__init__(source_scheme)
+        # Set the attributes
         self.source_scheme = source_scheme
         self.group_attributes = group_attributes
         self.agg_dict = agg_dict
         self.source_name = source_name
         self.source_df = source_df
         self.source_name = utils.get_calling_params_name(source_df)
+
+        # If the result DataFrame is None, perform the groupby and aggregation
         if result_df is None:
             self.source_name = utils.get_calling_params_name(source_df)
             source_df = source_df.reset_index()
@@ -26,10 +46,16 @@ class GroupBy(Operation.Operation):
         else:
             self.result_df = result_df
             self.result_name = utils.get_calling_params_name(result_df)
-            # result_df.name = self.result_name
-        # self.result_df.columns = self._get_columns_names()
 
-    def iterate_attributes(self):
+    def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
+        """
+        Iterate over the attributes of the result DataFrame.
+
+        This generator function yields each attribute of the result DataFrame along with a DatasetRelation object with the result DF.
+        It skips the attribute if it is named 'index'.
+
+        :yield: A tuple containing the attribute name and a DatasetRelation object.
+        """
         for attr in self.result_df.columns:
             if attr.lower() == "index":
                 continue
@@ -38,8 +64,10 @@ class GroupBy(Operation.Operation):
     def get_source_col(self, filter_attr, filter_values, bins):
         return None
 
-    def explain(self, schema=None, attributes=None, top_k=TOP_K_DEFAULT, explainer='fedex', target=None, dir=None, control=None, hold_out=[],
-                figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None, corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[]):
+    def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT, explainer: str='fedex',
+                target=None, dir: str | int=None, control=None, hold_out=[],
+                figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
+                corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[]):
         """
         Explain for group by operation
         :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
@@ -48,38 +76,48 @@ class GroupBy(Operation.Operation):
         :param show_scores: show scores on explanation
         :param figs_in_row: number of explanations figs in one row
         :param title: explanation title
+        :param dir: direction of the outlier. Can be 'high' or 'low', or the corresponding integer values 1 and -1 (HIGH and LOW constants).
 
         :return: explain figures
         """
+
         if explainer == 'outlier':
             res_col = None
             measure = OutlierMeasure()
 
+            # Get the result column. Despite this being a loop - the 2nd returned value of iterate_attributes is always the same.
+            # The change is only in the ignored first value. We simply need a loop to use the generator.
             for attr, dataset_relation in self.iterate_attributes():
                 _, res_col = OutlierMeasure.get_source_and_res_cols(dataset_relation, attr)
-            # print(self.group_attributes, self.source_df.name)
+                break
+
+            # Get the aggregation attribute and method
             try:
                 agg = list(self.agg_dict.items())[0]
             except:
                 agg = self.agg_dict.items()
-            agg_attr, agg_method = agg[0],agg[1][0]        
+            agg_attr, agg_method = agg[0], agg[1][0]
+
             if dir == 'high':
-                dir = 1
+                dir = HIGH
             elif dir == 'low':
-                dir = -1  
-            # (self, df_agg, df_in, g_att, g_agg, target)
+                dir = LOW
+
             if type(self.group_attributes) == list:
                 g_attr = self.group_attributes[0]
             else:
                 g_attr = self.group_attributes
-            return measure.explain_outlier(res_col, self.source_df, g_attr, agg_attr, agg_method, target, dir, control, hold_out)
+
+            return measure.explain_outlier(res_col, self.source_df, g_attr, agg_attr, agg_method, target, dir, control,
+                                           hold_out)
         if schema is None:
             schema = {}
 
         if attributes is None:
             attributes = []
+
+        # Unless the outlier explainer is used, the diversity measure is always used for the groupby operation.
         measure = DiversityMeasure()
-        # measure = NormalizedDiversityMeasure()
         scores = measure.calc_measure(self, schema, attributes, ignore=ignore)
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
@@ -87,6 +125,17 @@ class GroupBy(Operation.Operation):
 
     @staticmethod
     def get_one_to_many_attributes(df, group_attributes):
+        """
+        Identify and append one-to-many relationship attributes to the group attributes list.
+
+        This function iterates over the columns of the DataFrame and checks if there is a one-to-many relationship
+        between the specified group attributes and other columns. If such a relationship is found, the corresponding
+        column is appended to the group attributes list.
+
+        :param df: The DataFrame to check for one-to-many relationships.
+        :param group_attributes: The list of attributes to group by.
+        :return: The updated list of group attributes including one-to-many relationship attributes.
+        """
         for col in group_attributes:
             for candidate_col in df:
                 if candidate_col in group_attributes:
