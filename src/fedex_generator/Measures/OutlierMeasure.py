@@ -2,7 +2,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 from pandas.core.interchange.dataframe_protocol import DataFrame
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 from fedex_generator.Measures.BaseMeasure import BaseMeasure
 from fedex_generator.commons import utils
@@ -40,7 +40,8 @@ class OutlierMeasure(BaseMeasure):
     The influence with the hold-out set is defined as:\n
     .. math:: inf_{agg}(o,p,d,h) = \\lambda \ * \ inf_{agg}(o,p,d) - (1 - \\lambda) \ * \ inf_{agg}(h,p)\n
     Where:\n
-    - :math:`\lambda` is a parameter that represents the importance of not changing the value of the hold-out set.\n
+    - :math:`\lambda` is a parameter that represents the importance of not changing the value of the hold-out set.
+    In this project we use :math:`\lambda = 0.9`.\n
     """
 
     def __init__(self):
@@ -82,12 +83,13 @@ class OutlierMeasure(BaseMeasure):
 
     def merge_preds(self, df_agg: DataFrame, df_in: DataFrame, df_in_consider: DataFrame,
                     preds: List[Tuple[str, Tuple[float, float], float, str, int | None]], g_att: str, g_agg: str,
-                    agg_method: str, target, dir: int) -> Tuple[List[Tuple[str, str, int]], float, DataFrame]:
+                    agg_method: str, target, dir: int) -> tuple[
+        list[tuple[str, tuple[float, float], int | None]], float, Any | None]:
         """
         Merge predicates to find the most influential attributes.
 
         This function iterates over a list of predicates, applying filters to the input DataFrame to exclude
-        certain rows based on the predicates. It calculates the influence of each prediction and keeps track
+        certain rows based on the predicates. It calculates the influence of each predicate and keeps track
         of the most influential ones. The final influence score and the filtered DataFrame are returned.
 
         :param df_agg: DataFrame containing the aggregated data.
@@ -142,7 +144,7 @@ class OutlierMeasure(BaseMeasure):
                 agged_val_consider = agged_val_consider / agged_val_consider.sum()
                 agged_val = agged_val / agged_val.sum()
 
-            # Compute the influence score for the prediction.
+            # Compute the influence score for the predicate.
             inf = self.calc_influence_pred(df_agg, agged_val_consider, target, dir) / pow(
                 (df_in_consider.shape[0] / (df_exc_consider.shape[0] + 1)), 2)
 
@@ -159,138 +161,116 @@ class OutlierMeasure(BaseMeasure):
                 break
         return final_pred, final_inf, final_agg_df
 
-    def explain_outlier(self, df_agg: DataFrame, df_in: DataFrame, g_att: str, g_agg: str, agg_method: str, target: str,
-                        dir: int, control=None, hold_out: List = [], k: int = 1) -> None:
+
+    def compute_predicates_per_attribute(self, attr: str, df_in: DataFrame, g_att: str,
+                                         g_agg: str, agg_method: str, target: str, dir: int,
+                                         df_in_consider: DataFrame, df_agg_consider: DataFrame) -> List[Tuple[str, Any, float, str, int]]:
         """
-        Explain the outlier in the given DataFrame.
+            Compute predicates for a given attribute.
 
-        This function identifies and explains outliers in the given DataFrame by calculating the influence of
-        various attributes on the target attribute. It iterates over the attributes, applies filters, and
-        computes the influence score for each attribute. The most influential attributes are then used to
-        generate an explanation for the outlier.
+            This function calculates the influence of various predicates on a target attribute
+            by iterating over the values or bins of the given attribute. It generates a list of
+            predicates with their corresponding influence scores.
 
-        :param df_agg: DataFrame containing the aggregated data.
-        :param df_in: DataFrame containing the input data.
-        :param g_att: The grouping attribute.
-        :param g_agg: The aggregation attribute.
-        :param agg_method: The aggregation method to be used.
-        :param target: The target attribute for which the influence is being calculated.
-        :param dir: Direction factor, either 1 or -1, indicating the direction of the outlier. 1 for high, -1 for low.
-        :param control: List of control values for the grouping attribute.
-        :param hold_out: List of attributes to be held out from the analysis.
-        :param k: Number of top attributes to consider for the explanation.
+            :param attr: The attribute for which predicates are being computed.
+            :param df_in: DataFrame containing the input data.
+            :param g_att: The grouping attribute.
+            :param g_agg: The aggregation attribute.
+            :param agg_method: The aggregation method to be used.
+            :param target: The target attribute for which the influence is being calculated.
+            :param dir: Direction factor, either 1 or -1, indicating the direction of the outlier.
+            :param df_in_consider: DataFrame containing the data to be considered for filtering.
+            :param df_agg_consider: DataFrame containing the aggregated data to be considered.
 
-        :return: None. Will generate a plot with the explanation for the outlier.
+            :return: A list of predicates with their influence scores.
         """
-        # Get the attributes from the input DataFrame and remove the hold-out attributes.
-        attrs = df_in.columns
-        attrs = [a for a in attrs if a not in hold_out + [g_att, g_agg]]
-
+        dtype = df_in[attr].dtype.name
+        predicates = []
         exps = {}
 
-        agg_title = agg_method
-        if agg_method == 'count':
-            df_agg = df_agg / df_agg.sum()
+        # Ignore attributes with high correlation to the target attribute.
+        if dtype in ['int64', 'float64']:
+            if (df_in[g_att].dtype.name in ['int64', 'float64'] and df_in[g_att].corr(df_in[attr]) > 0.7) or (
+                    df_in[g_agg].dtype.name in ['int64', 'float64'] and df_in[g_agg].corr(df_in[attr]) > 0.7):
+                return []
 
-        predicates = []
+        # Get the series for the attribute and its data type.
+        series = df_in[attr]
+        dtype = df_in[attr].dtype.name
+        flag = False
+        df_in_consider_attr = df_in_consider[[g_att, g_agg, attr]]
 
-        # If no control values are provided, use all values for the grouping attribute.
-        if control == None:
-            control = list(df_agg.index)
-        df_in_consider = df_in
-        df_agg_consider = df_agg  # [control]
+        # If the data type is not 'float64', calculate the influence score for each value of the attribute.
+        if dtype not in ['float64']:
+            vals = series.value_counts()
+            if dtype != 'int64' or len(vals) < 20:
+                # Skip attributes with more than 50 unique values, as they are too computationally expensive.
+                if len(vals) > 50:
+                    return []
+                flag = True
 
-        # Iterate over the attributes, calculate the influence score, and generate predicates.
-        for attr in attrs:
+                for i in vals.index:
 
-            dtype = df_in[attr].dtype.name
-
-            # Ignore attributes with high correlation to the target attribute.
-            if dtype in ['int64', 'float64']:
-                if (df_in[g_att].dtype.name in ['int64', 'float64'] and df_in[g_att].corr(df_in[attr]) > 0.7) or (
-                        df_in[g_agg].dtype.name in ['int64', 'float64'] and df_in[g_agg].corr(df_in[attr]) > 0.7):
-                    continue
-
-            # Get the series for the attribute and its data type.
-            series = df_in[attr]
-            dtype = df_in[attr].dtype.name
-            flag = False
-            df_in_consider_attr = df_in_consider[[g_att, g_agg, attr]]
-
-            # If the data type is not 'float64', calculate the influence score for each value of the attribute.
-            if dtype not in ['float64']:
-                vals = series.value_counts()
-                if dtype != 'int64' or len(vals) < 20:
-                    # Skip attributes with more than 50 unique values, as they are too computationally expensive.
-                    if len(vals) > 50:
-                        continue
-                    flag = True
-
-                    for i in vals.index:
-
-                        # Exclude rows with the current value of the attribute.
-                        df_in_target_exc = df_in_consider_attr[(df_in_consider_attr[attr] != i)]
-                        # Aggregate the values for the excluded rows.
-                        agged_val = df_in_target_exc.groupby(g_att)[g_agg].agg(agg_method)
-                        if agg_method == 'count':
-                            agged_val = agged_val / agged_val.sum()
-
-                        # Calculate the influence score for the predicate.
-                        inf = self.calc_influence_pred(df_agg_consider, agged_val, target, dir) / (
-                            (df_in_consider.shape[0] / (df_in_target_exc.shape[0] + 0.01)))
-
-                        exps[(attr, i)] = inf
-                        predicates.append((attr, i, inf, 'cat', None))
-
-            n_bins = 20
-            if not flag:
-                _, bins = pd.cut(series, n_bins, retbins=True, duplicates='drop')
-                df_bins_in = pd.cut(df_in_consider_attr[attr], bins=bins).value_counts(
-                    normalize=True).sort_index()  # .rename('idx')
-                i = 1
-                for bin in df_bins_in.keys():
-                    new_bin = (float("{:.2f}".format(bin.left)), float("{:.2f}".format(bin.right)))
-                    df_in_exc = df_in_consider_attr[
-                        ((df_in_consider_attr[attr] < new_bin[0]) | (df_in_consider_attr[attr] >= new_bin[1]))]
-                    agged_val = df_in_exc.groupby(g_att)[g_agg].agg(agg_method)
+                    # Exclude rows with the current value of the attribute.
+                    df_in_target_exc = df_in_consider_attr[(df_in_consider_attr[attr] != i)]
+                    # Aggregate the values for the excluded rows.
+                    agged_val = df_in_target_exc.groupby(g_att)[g_agg].agg(agg_method)
                     if agg_method == 'count':
                         agged_val = agged_val / agged_val.sum()
 
                     # Calculate the influence score for the predicate.
                     inf = self.calc_influence_pred(df_agg_consider, agged_val, target, dir) / (
-                            (df_in_consider_attr.shape[0] / df_in_exc.shape[0]) + 1)
+                        (df_in_consider.shape[0] / (df_in_target_exc.shape[0] + 0.01)))
 
-                    # Store the influence score for the predicate.
-                    exps[(attr, (new_bin[0], new_bin[1]))] = inf
+                    exps[(attr, i)] = inf
+                    predicates.append((attr, i, inf, 'cat', None))
 
-                    # Add the predicate to the list of predicates.
-                    predicates.append((attr, new_bin, inf, 'bin', i))
-                    i += 1
+        n_bins = 20
+        if not flag:
+            _, bins = pd.cut(series, n_bins, retbins=True, duplicates='drop')
+            df_bins_in = pd.cut(df_in_consider_attr[attr], bins=bins).value_counts(
+                normalize=True).sort_index()  # .rename('idx')
+            i = 1
+            for bin in df_bins_in.keys():
+                new_bin = (float("{:.2f}".format(bin.left)), float("{:.2f}".format(bin.right)))
+                df_in_exc = df_in_consider_attr[
+                    ((df_in_consider_attr[attr] < new_bin[0]) | (df_in_consider_attr[attr] >= new_bin[1]))]
+                agged_val = df_in_exc.groupby(g_att)[g_agg].agg(agg_method)
+                if agg_method == 'count':
+                    agged_val = agged_val / agged_val.sum()
 
-        # Sort the predicates by influence score in descending order.
-        predicates.sort(key=lambda x: -x[2])
+                # Calculate the influence score for the predicate.
+                inf = self.calc_influence_pred(df_agg_consider, agged_val, target, dir) / (
+                        (df_in_consider_attr.shape[0] / df_in_exc.shape[0]) + 1)
 
-        # Merge the predicates to find the most influential attributes.
-        final_pred, final_inf, final_df = self.merge_preds(df_agg_consider, df_in, df_in_consider, predicates, g_att,
-                                                           g_agg, agg_method, target, dir)
+                # Store the influence score for the predicate.
+                exps[(attr, (new_bin[0], new_bin[1]))] = inf
 
-        # If the final DataFrame is empty, return an error message. Otherwise, generate the explanation plot.
-        if final_df is None:
-            return "There was no explanation."
+                # Add the predicate to the list of predicates.
+                predicates.append((attr, new_bin, inf, 'bin', i))
+                i += 1
 
-        # Create a new DataFrame with the aggregated values and the control values.
-        new_df_agg = df_agg.copy()
-        new_df_agg[control] = final_df[control]
-        new_df_agg[target] = final_df[target]
-        final_pred_by_attr = {}
+        return predicates
 
-        # Group the final predicates by attribute.
-        for a, i, rank in final_pred:
-            if a not in final_pred_by_attr.keys():
-                final_pred_by_attr[a] = []
-            final_pred_by_attr[a].append((i, rank))
+    def draw_bar_plot(self, df_agg: DataFrame, final_df: DataFrame, g_att: str, g_agg: str, final_pred_by_attr: dict,
+                      target: str, agg_title: str) -> None:
+        """
+        Draw a bar plot to visualize the influence of predicates on the target attribute.
 
-        # Create a plot to display the explanation for the outlier.
+        This function generates a bar plot comparing the aggregated values of the target attribute
+        before and after applying the most influential predicates. It highlights the differences
+        and provides an explanation for the outlier.
+
+        :param df_agg: DataFrame containing the aggregated data.
+        :param final_df: DataFrame containing the final aggregated data after applying predicates.
+        :param g_att: The grouping attribute.
+        :param g_agg: The aggregation attribute.
+        :param final_pred_by_attr: Dictionary containing the final predicates grouped by attribute.
+        :param target: The target attribute for which the influence is being visualized.
+        :param agg_title: Title for the aggregation method used in the plot.
+
+        :return: None. Displays the bar plot.
+        """
         fig, ax = plt.subplots(layout='constrained', figsize=(5, 5))
         x1 = list(df_agg.index)
         ind1 = np.arange(len(x1))
@@ -332,4 +312,81 @@ class OutlierMeasure(BaseMeasure):
         bar2[x2.index(target)].set_edgecolor('tab:green')
         bar2[x2.index(target)].set_linewidth(2)
         ax.get_xticklabels()[x1.index(target)].set_color('tab:green')
+
+        plt.show()
+
+
+    def explain_outlier(self, df_agg: DataFrame, df_in: DataFrame, g_att: str, g_agg: str, agg_method: str, target: str,
+                        dir: int, control=None, hold_out: List = [], k: int = 1) -> str | None:
+        """
+        Explain the outlier in the given DataFrame.
+
+        This function identifies and explains outliers in the given DataFrame by calculating the influence of
+        various attributes on the target attribute. It iterates over the attributes, applies filters, and
+        computes the influence score for each attribute. The most influential attributes are then used to
+        generate an explanation for the outlier.
+
+        :param df_agg: DataFrame containing the aggregated data.
+        :param df_in: DataFrame containing the input data.
+        :param g_att: The grouping attribute.
+        :param g_agg: The aggregation attribute.
+        :param agg_method: The aggregation method to be used.
+        :param target: The target attribute for which the influence is being calculated.
+        :param dir: Direction factor, either 1 or -1, indicating the direction of the outlier. 1 for high, -1 for low.
+        :param control: List of control values for the grouping attribute.
+        :param hold_out: List of attributes to be held out from the analysis.
+        :param k: Number of top attributes to consider for the explanation.
+
+        :return: None. Will generate a plot with the explanation for the outlier.
+        """
+        # Get the attributes from the input DataFrame and remove the hold-out attributes.
+        attrs = df_in.columns
+        attrs = [a for a in attrs if a not in hold_out + [g_att, g_agg]]
+
+        exps = {}
+
+        agg_title = agg_method
+        if agg_method == 'count':
+            df_agg = df_agg / df_agg.sum()
+
+        predicates = []
+
+        # If no control values are provided, use all values for the grouping attribute.
+        if control == None:
+            control = list(df_agg.index)
+        df_in_consider = df_in
+        df_agg_consider = df_agg  # [control]
+
+        # Iterate over the attributes, calculate the influence score, and generate predicates.
+        for attr in attrs:
+            preds = self.compute_predicates_per_attribute(attr, df_in, g_att, g_agg, agg_method, target, dir,
+                                                           df_in_consider, df_agg_consider)
+            predicates += preds
+
+
+        # Sort the predicates by influence score in descending order.
+        predicates.sort(key=lambda x: -x[2])
+
+        # Merge the predicates to find the most influential attributes.
+        final_pred, final_inf, final_df = self.merge_preds(df_agg_consider, df_in, df_in_consider, predicates, g_att,
+                                                           g_agg, agg_method, target, dir)
+
+        # If the final DataFrame is empty, return an error message. Otherwise, generate the explanation plot.
+        if final_df is None:
+            return "There was no explanation."
+
+        # Create a new DataFrame with the aggregated values and the control values.
+        new_df_agg = df_agg.copy()
+        new_df_agg[control] = final_df[control]
+        new_df_agg[target] = final_df[target]
+        final_pred_by_attr = {}
+
+        # Group the final predicates by attribute.
+        for a, i, rank in final_pred:
+            if a not in final_pred_by_attr.keys():
+                final_pred_by_attr[a] = []
+            final_pred_by_attr[a].append((i, rank))
+
+        # Create a plot to display the explanation for the outlier.
+        self.draw_bar_plot(df_agg, final_df, g_att, g_agg, final_pred_by_attr, target, agg_title)
         return  # explanation

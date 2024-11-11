@@ -313,7 +313,9 @@ class BaseMeasure(object):
         :param show_scores: Whether to show the scores on the plot. Default is False.
         :param title: The title of the plot. Optional.
         :param deleted: A dictionary of deleted attributes as keys, with the values as a tuple: (dataframe name, bin object, score, column values). Optional.
-        :return: A list of figures if there are multiple figures, otherwise a single figure.
+
+        :return: A list (or a single) matplotlib figures containing the explanations for the top k attributes, after
+        computing the influence.
         """
 
         # If deleted is not None, set the score dictionary to the deleted dictionary.
