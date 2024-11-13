@@ -1,4 +1,6 @@
 import pandas as pd
+from pandas import DataFrame
+from typing import Generator, Tuple, List
 
 from fedex_generator.Measures.ShapleyMeasure import ShapleyMeasure
 from fedex_generator.commons.consts import TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
@@ -9,11 +11,26 @@ from fedex_generator.Measures.ExceptionalityMeasure import ExceptionalityMeasure
 
 
 class Join(Operation.Operation):
-    def __init__(self, left_df, right_df, source_scheme, attribute, result_df=None, left_name=None, right_name=None):
+    """
+    Implementation of the Join operation, fit for the FEDEx explainability framework.\n
+    Provides a .explain() method for explaining the operation, as well as methods used for producing the explanation.
+    """
+    def __init__(self, left_df: DataFrame, right_df: DataFrame, source_scheme: dict, attribute: str,
+                 result_df: DataFrame=None, left_name: str=None, right_name: str=None):
+        """
+        :param left_df: DataFrame to join on the left side.
+        :param right_df: DataFrame to join on the right side.
+        :param source_scheme: The scheme of the source DataFrame, as a dictionary.
+        :param attribute: The attribute to join on.
+        :param result_df: The resulting DataFrame after the join operation. Optional.
+        :param left_name: Name of the left DataFrame. Optional.
+        :param right_name: Name of the right DataFrame. Optional.
+        """
         super().__init__(source_scheme)
         self.source_scheme = source_scheme
         self.attribute = attribute
 
+        # If a result DataFrame is not provided, perform the join operation
         if result_df is None:
             left_name = utils.get_calling_params_name(left_df)
             right_name = utils.get_calling_params_name(right_df)
@@ -31,7 +48,16 @@ class Join(Operation.Operation):
         self.right_df = right_df
         self.result_df = result_df
 
-    def iterate_attributes(self):
+    def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
+        """
+        Iterate over the attributes of the left and right DataFrames.
+
+        This method generates tuples containing an attribute and its corresponding DatasetRelation.
+        It first yields attributes from the left DataFrame, then from the right DataFrame, excluding any attributes
+        that are common between the two DataFrames.
+
+        :yield: Tuples of attribute name and DatasetRelation objects with the left and right DataFrames and the result DataFrame.
+        """
         for attr in self.left_df.columns:
             if attr.lower() == "index":
                 continue
@@ -42,8 +68,9 @@ class Join(Operation.Operation):
                 continue
             yield attr, DatasetRelation(self.right_df, self.result_df, self.right_name)
 
-    def explain(self, schema=None, attributes=None, top_k=TOP_K_DEFAULT,
-                figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None, corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[]):
+    def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT,
+                figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
+                corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[]):
         """
         Explain for filter operation
 
@@ -76,6 +103,7 @@ class Join(Operation.Operation):
 
         if schema is None:
             schema = {}
+        # When using the FEDEx explainer, the exceptionality measure is used to calculate the explanation.
         measure = ExceptionalityMeasure()
         scores = measure.calc_measure(self, schema, attributes)
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,

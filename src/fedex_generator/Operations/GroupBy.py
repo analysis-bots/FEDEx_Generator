@@ -1,4 +1,5 @@
 import pandas as pd
+from pandas import Series, DataFrame
 
 from fedex_generator.commons.consts import TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
 from fedex_generator.commons import utils
@@ -147,17 +148,41 @@ class GroupBy(Operation.Operation):
         return group_attributes
 
     @staticmethod
-    def _is_one_to_many(df, col1, col2):
+    def _is_one_to_many(df: DataFrame, col1: str, col2: str) -> bool:
+        """
+        Check if there is a one-to-many relationship between two columns in a DataFrame.
+
+        This function determines if there is a one-to-many relationship between the specified columns
+        by checking if each unique value in `col1` maps to a unique value in `col2`.
+
+        :param df: The DataFrame to check for the one-to-many relationship.
+        :param col1: The first column to check.
+        :param col2: The second column to check.
+        :return: True if there is a one-to-many relationship, False otherwise.
+        """
         if type(df) != pd.DataFrame:
             df = pd.DataFrame(df)
+
+        # Check if the first 1000 rows have a one-to-many relationship. This is done first for performance reasons.
         first_max_cheap_check = df[[col1, col2]].head(1000).groupby(col1).nunique()[col2].max()
+        # If the first 1000 rows do not have a one-to-many relationship, return False
         if first_max_cheap_check != 1:
             return False
 
+        # Check if the entire DataFrame has a one-to-many relationship
         first_max = df[[col1, col2]].groupby(col1).nunique()[col2].max()
         return first_max == 1
 
     def _get_columns_names(self):
+        """
+        Generate a list of column names for the result DataFrame.
+
+        This method processes the columns of the result DataFrame and constructs a list of column names.
+        It handles cases where columns are tuples (e.g., from multi-index DataFrames) by joining the tuple elements.
+        It also appends the aggregation method to the column names if applicable.
+
+        :return: A list of column names for the result DataFrame.
+        """
         columns = []
         for column in list(self.result_df.columns):
             if isinstance(column, tuple):
