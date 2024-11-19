@@ -1,0 +1,4 @@
+# Queries for the adult census income dataset
+(label, ==, fedex, {value: <=50K, top_k: 10})
+#(workclass, groupby, fedex, {agg_function: mean, top_k: 10, select_columns: [age ; fnlwgt ; education-num ; capital-gain ; capital-loss ; hours-per-week]})
+#(age, join, fedex, {})
