@@ -51,6 +51,29 @@ class Query:
     explainer: str
     arguments: Dict[str, str | int | float]
 
+    @staticmethod
+    def from_string(s: str) -> 'Query':
+        """
+        Create a Query object from a string representation.
+        :param s: The string to convert.
+        :return: A Query object.
+        """
+        s = (s.replace('(', '').replace(')', '')
+             .replace("Querycolumn=",'').replace("explainer=", '')
+             .replace("operation=",'').replace("arguments=",'')
+             .replace("'",'').split(',', maxsplit=3))
+        for i in range(3):
+            s[i] = s[i].strip()
+        s[3] = dict_string_to_dict(s[3])
+        return Query(*s)
+
+    def __str__(self):
+        # Give a string representation of the query, but if any of the dict values are lists, replace the commas in the list with ';'.
+        arguments = self.arguments
+        if isinstance(arguments, dict):
+            arguments = {k: v if type(v) != list else str(v).replace(',', ';') for k, v in arguments.items()}
+        return f"Query(column={self.column}, operation={self.operation}, explainer={self.explainer}, arguments={arguments})"
+
 
 def dict_string_to_dict(d: str) -> Dict[str, str | int | float]:
     """
@@ -69,7 +92,7 @@ def dict_string_to_dict(d: str) -> Dict[str, str | int | float]:
 
         if len(value) > 1:
             # In the case of a list of values, replace the brackets and strip the values.
-            value = [v.replace('[', '').replace(']', '').strip() for v in value]
+            value = [v.replace('[', '').replace(']', '').replace('"','').strip() for v in value]
         else:
             value = value[0].strip()
 
@@ -432,6 +455,11 @@ def main():
     # as well as for convenience - so the test can automatically run on the datasets without the need for manual input.
     all_results_dict['first_dataset'] = input_file
     all_results_dict['second_dataset'] = second_dataset_path
+    # Find the dataset name from the input file path, depending on the OS.
+    if input_file.find('/') != -1:
+        all_results_dict['dataset_name'] = input_file.split('/')[-1].split('.')[0]
+    else:
+        all_results_dict['dataset_name'] = input_file.split('\\')[-1].split('.')[0]
 
     # Save the dictionary to a JSON file
     with open(output_file, 'w') as f:
