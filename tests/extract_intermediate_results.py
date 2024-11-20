@@ -274,7 +274,19 @@ def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset:
     else:
         measure = DiversityMeasure()
 
-    correlated_attributes = operation.get_correlated_attributes()
+    results_dict = {}
+
+    # If the operation is a filter operation, we can get the correlated attributes.
+    if query.operation != 'groupby' and query.operation != 'join':
+        correlated_attributes = operation.get_correlated_attributes()
+        results_dict['correlated_attributes'] = correlated_attributes
+    # If the operation is a group-by operation, we can get the one-to-many attributes and the column names.
+    elif query.operation == 'groupby':
+        one_to_many_attributes = GroupBy.get_one_to_many_attributes(first_dataset, [query.column])
+        column_names = operation._get_columns_names()
+        results_dict['one_to_many_attributes'] = one_to_many_attributes
+        results_dict['column_names'] = column_names
+    # Join operations have no special attributes to extract.
 
     measure_scores, score_dict = replicate_calc_measure(operation, measure)
     saved_influence_vals, significance_vals, saved_results = replicate_calc_influence(measure, score_dict,
@@ -287,16 +299,90 @@ def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset:
     saved_influence_vals = [list(influence_vals) for influence_vals in saved_influence_vals]
 
     # Save all of the intermediate results in a dictionary
-    results_dict = {
-        'correlated_attributes': correlated_attributes,
-        'measure_scores': measure_scores,
-        'score_dict': score_dict,
-        'influence_vals': saved_influence_vals,
-        'significance_vals': significance_vals,
-        'saved_results': saved_results.to_json(orient='records')
-    }
+    results_dict['measure_scores'] = measure_scores
+    results_dict['score_dict'] = score_dict
+    results_dict['influence_vals'] = saved_influence_vals
+    results_dict['significance_vals'] = significance_vals
+    results_dict['saved_results'] = saved_results.to_json(orient='records')
 
     return results_dict
+
+def dir_to_int(dir: str | int) -> int:
+    """
+    Convert a direction string to an integer.
+    :param dir: The direction string.
+    :return: The direction as an integer.
+    """
+    if dir == 'high':
+        return 1
+    elif dir == 'low':
+        return -1
+    else:
+        return dir
+
+def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None) -> dict:
+    """
+    Run the steps of a query explanation using the outlier explainer.
+    :param query: The query object.
+    :param first_dataset: The first dataset. Mandatory.
+    :param second_dataset: The second dataset. Only needed if a join operation is performed. Can be None if not needed.
+    Should not be needed since at the time of writing this, the outlier explainer only supports groupby operations.
+    :return: A dictionary with the results.
+    """
+    operation = create_operation_object(query, first_dataset, second_dataset)
+
+    results_dict = {}
+
+    if query.operation != 'groupby':
+        results_dict['error'] = 'Outlier explanation is currently only supported for groupby operations.'
+        return results_dict
+
+    measure = OutlierMeasure()
+
+    preds = []
+
+    attrs = first_dataset.columns
+    attrs = [a for a in attrs if a not in [query.column, query.arguments['select_columns']]]
+
+    # Do the predicate calculation for each attribute, like in the explain function.
+    for attr in attrs:
+        predicates = measure.compute_predicates_per_attribute(
+            attr=attr,
+            df_in=first_dataset,
+            g_att=query.column,
+            g_agg=query.arguments['select_columns'],
+            agg_method=query.arguments['agg_function'],
+            target=query.arguments['target'],
+            dir=dir_to_int(query.arguments['dir']),
+            df_in_consider=first_dataset,
+            df_agg_consider=operation.result_df
+        )
+
+        preds += predicates
+
+    preds.sort(key=lambda x: -x[2])
+
+    results_dict['preds'] = preds
+
+    # Use the merge_preds function to get the final results.
+    final_pred, final_inf, final_df = measure.merge_preds(
+        df_agg=operation.result_df,
+        df_in=first_dataset,
+        df_in_consider=first_dataset,
+        preds=preds,
+        g_att=query.column,
+        g_agg=query.arguments['select_columns'],
+        agg_method=query.arguments['agg_function'],
+        target=query.arguments['target'],
+        dir=dir_to_int(query.arguments['dir']),
+    )
+
+    results_dict['final_pred'] = final_pred
+    results_dict['final_inf'] = final_inf
+    results_dict['final_df'] = final_df.to_json(orient='records') if final_df is not None else None
+
+    return results_dict
+
 
 
 def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_dataset: DataFrame = None) -> dict:
@@ -312,6 +398,10 @@ def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_da
 
         if query.explainer == 'fedex':
             all_results_dict[str(query)] = fedex_explain_runner(query, first_dataset, second_dataset)
+        elif query.explainer == 'outlier':
+            all_results_dict[str(query)] = outlier_explain_runner(query, first_dataset, second_dataset)
+        else:
+            all_results_dict[str(query)] = {'error': f"Explainer {query.explainer} not supported."}
 
     return all_results_dict
 
