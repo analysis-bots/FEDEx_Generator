@@ -6,6 +6,25 @@ import sys
 import os
 from typing import List, Dict
 import io
+from concurrent.futures import ThreadPoolExecutor
+from colorama import init as colorama_init
+from colorama import Fore
+from colorama import Style
+import warnings
+import result_comparison_functions as rcf
+import random
+random.seed(42)
+import test_utils as tu
+
+warnings.filterwarnings("ignore")
+colorama_init()
+
+test_fail_explanations = {
+    "correlated attributes test": "The list of correlated attributes in the re-produced results does not match the list of correlated attributes in the saved results. There is likely an error in the method get_correlated_attributes of the Filter operation.",
+    "measure scores test": "The measure scores in the re-produced results do not match the measure scores in the saved results. There is likely an error in the method calc_measure_internal of the tested measure.",
+    "score dicts test": "The score dictionaries in the re-produced results do not match the score dictionaries in the saved results. There is likely an error in the method calc_measure_internal of the tested measure, or in calc_measure in BaseMeasure.",
+    "influence values test": "The influence values in the re-produced results do not match the influence values in the saved results. There is likely an error in the method calc_influence_col of the tested measure."
+}
 
 
 default_results_path = "resources/results_files"
@@ -116,8 +135,73 @@ def load_datasets(results: List[dict], default_configuration_path: str = "resour
 
 
 
+
+
+def compare_results(result_files: List[dict], re_produced_results: List[dict]):
+    failed_results = []
+    for result in result_files:
+        print(f"\n \n -------------------------------------------------- \n"
+              f"\033[1m Comparing results on dataset {result['dataset_name']} \033[0;0m \n --------------------------------------------------")
+        matching_result = [r for r in re_produced_results if r['idx'] == result['idx']][0]
+        failed_tests = []
+        for k, v in result.items():
+            if not isinstance(v, dict):
+                continue
+            failed_tests.append({
+                'test_name': k,
+                'passed': True,
+                'failed_tests': []
+            })
+            print(f"\n Comparing query {k} \n --------------------------------------------------")
+            matching_result_query = matching_result[k]
+
+            if 'correlated_attributes' in v:
+                print("Comparing correlated attributes: \n")
+                passed_test = rcf.compare_correlated_attributes(v['correlated_attributes'], matching_result_query['correlated_attributes'])
+                if not passed_test:
+                    failed_tests[-1]['passed'] = False
+                    failed_tests[-1]['failed_tests'].append('correlated attributes test')
+
+            if 'measure_scores' in v:
+                print("Comparing measure scores: \n")
+                passed_test = rcf.compare_measure_scores(v['measure_scores'], matching_result_query['measure_scores'])
+                if not passed_test:
+                    failed_tests[-1]['passed'] = False
+                    failed_tests[-1]['failed_tests'].append('measure scores test')
+
+            if 'score_dict' in v:
+                print("Comparing score dicts: \n")
+                passed_test = rcf.compare_score_dicts(v['score_dict'], matching_result_query['score_dict'])
+                if not passed_test:
+                    failed_tests[-1]['passed'] = False
+                    failed_tests[-1]['failed_tests'].append('score dicts test')
+
+            if 'influence_vals' in v:
+                print("Comparing influence values: \n")
+                v['influence_vals'] = tu.fix_duplicate_col_names_and_bin_names(v['influence_vals'])
+                matching_result_query['influence_vals'] = tu.fix_duplicate_col_names_and_bin_names(matching_result_query['influence_vals'])
+                passed_test = rcf.compare_influence_vals(v['influence_vals'], matching_result_query['influence_vals'])
+                if not passed_test:
+                    failed_tests[-1]['passed'] = False
+                    failed_tests[-1]['failed_tests'].append('influence values test')
+
+            if 'significance_vals' in v:
+                print("Comparing significance values: \n")
+                v['significance_vals'] = tu.fix_duplicate_col_names_and_bin_names(v['significance_vals'])
+                matching_result_query['significance_vals'] = tu.fix_duplicate_col_names_and_bin_names(matching_result_query['significance_vals'])
+                passed_test = rcf.compare_significance_vals(v['significance_vals'], matching_result_query['significance_vals'])
+                if not passed_test:
+                    failed_tests[-1]['passed'] = False
+                    failed_tests[-1]['failed_tests'].append('significance values test')
+
+
+
 def main():
     result_files = load_all_results(sys.argv[1:] if len(sys.argv) > 1 else None)
+
+    for i in range(len(result_files)):
+        result_files[i]['idx'] = i
+
     datasets = load_datasets(result_files)
     result_queries = [
         [v['query_object'] for k, v in result.items() if isinstance(v, dict) and 'query_object' in v]
@@ -126,18 +210,20 @@ def main():
 
     # Run all the queries on the datasets using the current implementation.
     re_produced_results = []
-    for i, result in enumerate(result_files):
-        queries = result_queries[i]
-        first_dataset = datasets[result['dataset_name']]
-        second_dataset = datasets[result['second_dataset_name']]
-        re_produced_results.append(run_on_all_queries(queries, first_dataset, second_dataset))
-    print(re_produced_results)
 
-    # Remove metadata from the results to compare them.
-    all_results_no_metadata = [
-        {k: v for k, v in result.items() if isinstance(v, dict) and 'query_object' in v}
-        for result in result_files
-    ]
+    # Use a thread pool to run the queries in parallel.
+    with ThreadPoolExecutor() as executor:
+        re_produced_results = list(executor.map(
+            run_on_all_queries,
+            result_queries,
+            [datasets[result['dataset_name']] for result in result_files],
+            [datasets[result['second_dataset_name']] for result in result_files],
+            range(len(result_files)),
+            [False] * len(result_files)
+        ))
+
+
+    compare_results(result_files, re_produced_results)
 
 
 

@@ -29,17 +29,17 @@ from fedex_generator.Operations.Join import Join
 from fedex_generator.Measures.DiversityMeasure import DiversityMeasure
 from fedex_generator.Measures.ExceptionalityMeasure import ExceptionalityMeasure
 from fedex_generator.Measures.OutlierMeasure import OutlierMeasure
-from fedex_generator.commons import utils
 from fedex_generator.Operations.Operation import Operation
 from fedex_generator.Measures.BaseMeasure import BaseMeasure
 
 import sys
 import json
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Any
 from dataclasses import dataclass
 import pandas as pd
 from pandas import DataFrame
-from paretoset import paretoset
+import random
+random.seed(42)
 
 from fedex_generator.commons.consts import SIGNIFICANCE_THRESHOLD
 
@@ -192,11 +192,10 @@ def replicate_calc_measure(operation: Operation, measure: BaseMeasure) -> tuple[
     :param measure: The measure object to use.
     :return: A list of measure scores, and the score dict.
     """
-    measure_scores = []
+    measure_scores = {}
     score_dict = {}
     for attr, dataset_relation in operation.iterate_attributes():
-        measure_scores.append([])
-
+        measure_scores[attr] = []
         # Replicating the calc_measure method
         source_col, res_col = measure.get_source_and_res_cols(dataset_relation, attr)
         size = operation.get_bins_count()
@@ -204,8 +203,8 @@ def replicate_calc_measure(operation: Operation, measure: BaseMeasure) -> tuple[
 
         measure_score = -np.inf
         for bin_ in bin_candidates.bins:
-            measure_scores[-1].append(measure.calc_measure_internal(bin_))
-            measure_score = max(measure_score, measure_scores[-1][-1])
+            measure_scores[attr].append(measure.calc_measure_internal(bin_))
+            measure_score = max(measure_score, measure_scores[attr][-1])
 
         score_dict[attr] = (
             dataset_relation.get_source_name(), bin_candidates, measure_score, (source_col, res_col)
@@ -222,7 +221,7 @@ def replicate_calc_measure(operation: Operation, measure: BaseMeasure) -> tuple[
 
 
 def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple], k: int) -> tuple[
-    list[ndarray[Any, dtype[Any]]], list[Any], DataFrame]:
+    list[dict[str, str | ndarray[Any, dtype[Any]] | Any]], list[dict[str, str | Any]], DataFrame]:
     """
     Replicates the calc_influence method from the BaseMeasure class, but with saving computation results along
     the way.\n
@@ -252,7 +251,12 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
             influence_vals = measure.get_influence_col(max_col_name, current_bin, False)
             influence_vals_list = np.array(list(influence_vals.values()))
 
-            saved_influence_vals.append(influence_vals_list)
+            saved_influence_vals.append({
+                'column': max_col_name,
+                'bin': current_bin.get_bin_name(),
+                # We need the values to be a list, as numpy arrays can't be serialized to JSON.
+                'values': list(influence_vals_list)
+            })
 
             if np.all(np.isnan(influence_vals_list)):
                 continue
@@ -262,7 +266,11 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
             for max_value, influence_val in zip(max_values, max_influences):
                 significance = measure.get_significance(influence_val, influence_vals_list)
 
-                significance_vals.append(significance)
+                significance_vals.append({
+                    'column': max_col_name,
+                    'bin': current_bin.get_bin_name(),
+                    'significance': significance
+                })
 
                 if significance < SIGNIFICANCE_THRESHOLD:
                     continue
@@ -282,12 +290,13 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
     return saved_influence_vals, significance_vals, results
 
 
-def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None) -> dict:
+def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None, require_json_output: bool = True) -> dict:
     """
     Run the steps of a query explanation using the fedex explainer.
     :param query: The query object.
     :param first_dataset: The first dataset.
-    :param second_dataset: The second dataset.
+    :param second_dataset: The second dataset. Default is None.
+    :param require_json_output: Whether to require the output of any dataframes to be in JSON format. Default is True.
     :return: A dictionary with the results.
     """
     operation = create_operation_object(query, first_dataset, second_dataset)
@@ -318,15 +327,12 @@ def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset:
     # Drop bins and columns from the score dicts, as they can not be serialized.
     score_dict = {k: (v[0], v[2]) for k, v in score_dict.items()}
 
-    # Convert the np arrays to lists, as they can't be serialized to JSON.
-    saved_influence_vals = [list(influence_vals) for influence_vals in saved_influence_vals]
-
     # Save all of the intermediate results in a dictionary
     results_dict['measure_scores'] = measure_scores
     results_dict['score_dict'] = score_dict
     results_dict['influence_vals'] = saved_influence_vals
     results_dict['significance_vals'] = significance_vals
-    results_dict['saved_results'] = saved_results.to_json(orient='records')
+    results_dict['saved_results'] = saved_results.to_json(orient='records') if require_json_output else saved_results
 
     return results_dict
 
@@ -343,13 +349,14 @@ def dir_to_int(dir: str | int) -> int:
     else:
         return dir
 
-def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None) -> dict:
+def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None, require_json_output: bool = True) -> dict:
     """
     Run the steps of a query explanation using the outlier explainer.
     :param query: The query object.
     :param first_dataset: The first dataset. Mandatory.
     :param second_dataset: The second dataset. Only needed if a join operation is performed. Can be None if not needed.
     Should not be needed since at the time of writing this, the outlier explainer only supports groupby operations.
+    :param require_json_output: Whether to require the output of any dataframes to be in JSON format. Default is True.
     :return: A dictionary with the results.
     """
     operation = create_operation_object(query, first_dataset, second_dataset)
@@ -400,31 +407,40 @@ def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_datase
         dir=dir_to_int(query.arguments['dir']),
     )
 
+    if require_json_output and final_df is not None:
+        final_df = final_df.to_json(orient='records')
+
     results_dict['final_pred'] = final_pred
     results_dict['final_inf'] = final_inf
-    results_dict['final_df'] = final_df.to_json(orient='records') if final_df is not None else None
+    results_dict['final_df'] = final_df if final_df is not None else None
 
     return results_dict
 
 
 
-def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_dataset: DataFrame = None) -> dict:
+def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_dataset: DataFrame = None,
+                       idx: int = None, require_json_output: bool = True) -> dict:
     """
     Loop over the queries, running the appropriate operations and explainers on each one and storing the results.
     :param queries: A list of Query objects.
     :param first_dataset: The first dataset. Mandatory.
     :param second_dataset: The second dataset. Only needed for join operations. Can be None if not needed.
+    :param idx: An index to attach to the query results, if needed. Used for testing.
+    :param require_json_output: Whether to require the output of any dataframes to be in JSON format. Default is True.
     :return: A dictionary with the results of all the queries, where the keys are the queries.
     """
     all_results_dict = {}
     for query in queries:
 
         if query.explainer == 'fedex':
-            all_results_dict[str(query)] = fedex_explain_runner(query, first_dataset, second_dataset)
+            all_results_dict[str(query)] = fedex_explain_runner(query, first_dataset, second_dataset, require_json_output)
         elif query.explainer == 'outlier':
-            all_results_dict[str(query)] = outlier_explain_runner(query, first_dataset, second_dataset)
+            all_results_dict[str(query)] = outlier_explain_runner(query, first_dataset, second_dataset, require_json_output)
         else:
             all_results_dict[str(query)] = {'error': f"Explainer {query.explainer} not supported."}
+
+    if idx is not None:
+        all_results_dict['idx'] = idx
 
     return all_results_dict
 
