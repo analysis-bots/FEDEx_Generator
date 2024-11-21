@@ -1,0 +1,21 @@
+{
+  "all":
+  [
+    {
+      "name": "adult",
+      "link": "https://raw.githubusercontent.com/analysis-bots/pd-explain/refs/heads/main/Examples/Datasets/adult.csv"
+    },
+    {
+      "name": "bank_churners_user_study",
+      "link": "https://raw.githubusercontent.com/analysis-bots/pd-explain/refs/heads/main/Examples/Datasets/bank_churners_user_study.csv"
+    },
+    {
+      "name": "houses",
+      "link": "https://raw.githubusercontent.com/analysis-bots/pd-explain/refs/heads/main/Examples/Datasets/houses.csv"
+    },
+    {
+      "name": "spotify",
+      "link": "https://github.com/analysis-bots/pd-explain/raw/refs/heads/main/Examples/Datasets/spotify_all.csv"
+    }
+  ]
+}

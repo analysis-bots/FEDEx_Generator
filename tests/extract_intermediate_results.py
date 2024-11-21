@@ -461,6 +461,14 @@ def main():
     else:
         all_results_dict['dataset_name'] = input_file.split('\\')[-1].split('.')[0]
 
+    if second_dataset_path:
+        if second_dataset_path.find('/') != -1:
+            all_results_dict['second_dataset_name'] = second_dataset_path.split('/')[-1].split('.')[0]
+        else:
+            all_results_dict['second_dataset_name'] = second_dataset_path.split('\\')[-1].split('.')[0]
+    else:
+        all_results_dict['second_dataset_name'] = None
+
     # Save the dictionary to a JSON file
     with open(output_file, 'w') as f:
         json.dump(all_results_dict, f, indent=4)

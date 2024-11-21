@@ -565,38 +565,31 @@
                 0.019379412027522122
             ],
             [
-                0.014417120900723793
-            ],
-            [
-                0.008335448127959957
-            ],
-            [
-                0.02326235367706192,
-                0.02326235367706192
-            ],
-            [
-                0.01566464122955946
+                0.0,
+                0.0
             ],
             [
                 0.008462157090519173,
                 0.008462157090519173
             ],
             [
-                0.02918130640693417,
-                0.02918130640693417
-            ],
-            [
-                0.014417120900723793
-            ],
-            [
-                0.0,
-                0.0
+                0.017542310785452597
             ],
             [
                 0.00534152443928157
             ],
             [
-                0.017542310785452597
+                0.02326235367706192,
+                0.02326235367706192
+            ],
+            [
+                0.008335448127959957
+            ],
+            [
+                0.01566464122955946
+            ],
+            [
+                0.014417120900723793
             ],
             [
                 0.0,
@@ -606,7 +599,14 @@
                 0.009441604861049058
             ],
             [
+                0.02918130640693417,
+                0.02918130640693417
+            ],
+            [
                 0.0016809936556161365
+            ],
+            [
+                0.014417120900723793
             ]
         ],
         "score_dict": {
@@ -674,29 +674,33 @@
                 "second_dataset",
                 0.019379412027522122
             ],
-            "second_dataset_occupation": [
+            "second_dataset_capital-loss": [
                 "second_dataset",
-                0.014417120900723793
-            ],
-            "second_dataset_native-country": [
-                "second_dataset",
-                0.008335448127959957
-            ],
-            "second_dataset_hours-per-week": [
-                "second_dataset",
-                0.02326235367706192
-            ],
-            "second_dataset_marital-status": [
-                "second_dataset",
-                0.01566464122955946
+                0.0
             ],
             "second_dataset_fnlwgt": [
                 "second_dataset",
                 0.008462157090519173
             ],
-            "second_dataset_education-num": [
+            "second_dataset_relationship": [
                 "second_dataset",
-                0.02918130640693417
+                0.017542310785452597
+            ],
+            "second_dataset_race": [
+                "second_dataset",
+                0.00534152443928157
+            ],
+            "second_dataset_hours-per-week": [
+                "second_dataset",
+                0.02326235367706192
+            ],
+            "second_dataset_native-country": [
+                "second_dataset",
+                0.008335448127959957
+            ],
+            "second_dataset_marital-status": [
+                "second_dataset",
+                0.01566464122955946
             ],
             "second_dataset_workclass": [
                 "second_dataset",
@@ -706,25 +710,21 @@
                 "second_dataset",
                 0.0
             ],
-            "second_dataset_race": [
-                "second_dataset",
-                0.00534152443928157
-            ],
-            "second_dataset_relationship": [
-                "second_dataset",
-                0.017542310785452597
-            ],
-            "second_dataset_capital-loss": [
-                "second_dataset",
-                0.0
-            ],
             "second_dataset_sex": [
                 "second_dataset",
                 0.009441604861049058
             ],
+            "second_dataset_education-num": [
+                "second_dataset",
+                0.02918130640693417
+            ],
             "second_dataset_label": [
                 "second_dataset",
                 0.0016809936556161365
+            ],
+            "second_dataset_occupation": [
+                "second_dataset",
+                0.014417120900723793
             ]
         },
         "influence_vals": [
@@ -2338,7 +2338,8 @@
         "final_inf": 0.001,
         "final_df": null
     },
-    "first_dataset": "C:\\Users\\Yuval\\PycharmProjects\\pd-explain\\Examples\\Datasets\\adult.csv",
+    "first_dataset": "a",
     "second_dataset": "C:\\Users\\Yuval\\PycharmProjects\\pd-explain\\Examples\\Datasets\\adult.csv",
-    "dataset_name": "adult"
+    "dataset_name": "adult",
+    "second_dataset_name": "adult"
 }
