@@ -19,6 +19,8 @@ The output file will be a JSON file, and is meant for usage in the unit tests.
 
 This script can be used with any dataset and query file, as long as the queries are formatted correctly.
 """
+import os
+
 import numpy as np
 from numpy import ndarray, dtype
 
@@ -37,8 +39,9 @@ import json
 from typing import List, Dict, Any
 from dataclasses import dataclass
 import pandas as pd
-from pandas import DataFrame
+from pandas import DataFrame, Series
 import random
+
 random.seed(42)
 
 from fedex_generator.commons.consts import SIGNIFICANCE_THRESHOLD
@@ -59,9 +62,9 @@ class Query:
         :return: A Query object.
         """
         s = (s.replace('(', '').replace(')', '')
-             .replace("Querycolumn=",'').replace("explainer=", '')
-             .replace("operation=",'').replace("arguments=",'')
-             .replace("'",'').split(',', maxsplit=3))
+             .replace("Querycolumn=", '').replace("explainer=", '')
+             .replace("operation=", '').replace("arguments=", '')
+             .replace("'", '').split(',', maxsplit=3))
         for i in range(3):
             s[i] = s[i].strip()
         s[3] = dict_string_to_dict(s[3])
@@ -92,7 +95,7 @@ def dict_string_to_dict(d: str) -> Dict[str, str | int | float]:
 
         if len(value) > 1:
             # In the case of a list of values, replace the brackets and strip the values.
-            value = [v.replace('[', '').replace(']', '').replace('"','').strip() for v in value]
+            value = [v.replace('[', '').replace(']', '').replace('"', '').strip() for v in value]
         else:
             value = value[0].strip()
 
@@ -119,17 +122,33 @@ def dict_string_to_dict(d: str) -> Dict[str, str | int | float]:
     return return_dict
 
 
-def get_queries(query_file: str) -> List[Query]:
+def extract_global_select(select_str: str) -> List[str]:
+    global_select = select_str.strip().replace('GlobalSelect=', '').replace('[', '').replace(']', '').split(',')
+    for i in range(len(global_select)):
+        global_select[i] = global_select[i].strip()
+
+    return global_select
+
+
+def get_queries(query_file: str) -> tuple[list[Query], list[str] | None, list[str] | None]:
     """
     Extract queries from the query file.
     :param query_file: A path to a file containing queries, as described above.
-    :return: A list of queries
+    :return: A list of queries, as well as global select operations for the first and second datasets, if they are present.
     """
     queries = []
+    global_select = None
+    global_select_second = None
     with open(query_file, 'r') as f:
         for line in f:
             # Skip comments
-            if line.startswith('#'):
+            if line.startswith('#') or line.strip() == '':
+                continue
+            elif line.startswith('GlobalSelect'):
+                global_select = extract_global_select(line)
+                continue
+            elif line.startswith("GlobalSelectSecond"):
+                global_select_second = extract_global_select(line)
                 continue
             query = line.strip().replace('(', '').replace(')', '').split(',', maxsplit=3)
             for i in range(3):
@@ -139,7 +158,7 @@ def get_queries(query_file: str) -> List[Query]:
             q = Query(*query)
             queries.append(q)
     f.close()
-    return queries
+    return queries, global_select, global_select_second
 
 
 def create_operation_object(query: Query, dataset: DataFrame, second_dataset: DataFrame = None):
@@ -156,7 +175,7 @@ def create_operation_object(query: Query, dataset: DataFrame, second_dataset: Da
             attribute=query.column, operation_str=query.operation,
             value=query.arguments['value'])
     elif query.operation == 'groupby':
-        if query.arguments['select_columns'] is None:
+        if 'select_columns' not in query.arguments or query.arguments['select_columns'] is None:
             after_op = dataset.groupby(query.column).aggregate(query.arguments['agg_function'])
         else:
             after_op = dataset.groupby(query.column)[query.arguments['select_columns']].aggregate(
@@ -183,7 +202,8 @@ def create_operation_object(query: Query, dataset: DataFrame, second_dataset: Da
     return operation
 
 
-def replicate_calc_measure(operation: Operation, measure: BaseMeasure) -> tuple[List[List[float]], Dict[str, tuple]]:
+def replicate_calc_measure(operation: Operation, measure: BaseMeasure) -> tuple[
+    dict[Any, list[Any]], dict[Any, tuple[Any, Bins, float | Any, tuple[Any, Any]]]]:
     """
     Replicates the calc_measure method from the BaseMeasure class, but with saving computation results along
     the way.\n
@@ -234,7 +254,6 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
 
     saved_influence_vals = []
     significance_vals = []
-
 
     score_and_col = [(score_dict[col][2], col, score_dict[col][1], score_dict[col][3])
                      for col in score_dict]
@@ -290,7 +309,8 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
     return saved_influence_vals, significance_vals, results
 
 
-def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None, require_json_output: bool = True) -> dict:
+def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None,
+                         require_json_output: bool = True) -> dict:
     """
     Run the steps of a query explanation using the fedex explainer.
     :param query: The query object.
@@ -322,7 +342,8 @@ def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset:
 
     measure_scores, score_dict = replicate_calc_measure(operation, measure)
     saved_influence_vals, significance_vals, saved_results = replicate_calc_influence(measure, score_dict,
-                                                                                      query.arguments['top_k'] if 'top_k' in query.arguments else 1)
+                                                                                      query.arguments[
+                                                                                          'top_k'] if 'top_k' in query.arguments else 1)
 
     # Drop bins and columns from the score dicts, as they can not be serialized.
     score_dict = {k: (v[0], v[2]) for k, v in score_dict.items()}
@@ -335,6 +356,7 @@ def fedex_explain_runner(query: Query, first_dataset: DataFrame, second_dataset:
     results_dict['saved_results'] = saved_results.to_json(orient='records') if require_json_output else saved_results
 
     return results_dict
+
 
 def dir_to_int(dir: str | int) -> int:
     """
@@ -349,7 +371,9 @@ def dir_to_int(dir: str | int) -> int:
     else:
         return dir
 
-def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None, require_json_output: bool = True) -> dict:
+
+def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None,
+                           require_json_output: bool = True) -> dict:
     """
     Run the steps of a query explanation using the outlier explainer.
     :param query: The query object.
@@ -408,14 +432,17 @@ def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_datase
     )
 
     if require_json_output and final_df is not None:
-        final_df = final_df.to_json(orient='records')
+        # If the final_df is a Series, convert it to a DataFrame so we can save it correctly.
+        if isinstance(final_df, Series):
+            final_df = final_df.to_frame()
+        # Save, while making sure that the index also gets saved.
+        final_df = final_df.to_json(orient='columns')
 
     results_dict['final_pred'] = final_pred
     results_dict['final_inf'] = final_inf
     results_dict['final_df'] = final_df if final_df is not None else None
 
     return results_dict
-
 
 
 def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_dataset: DataFrame = None,
@@ -433,9 +460,11 @@ def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_da
     for query in queries:
 
         if query.explainer == 'fedex':
-            all_results_dict[str(query)] = fedex_explain_runner(query, first_dataset, second_dataset, require_json_output)
+            all_results_dict[str(query)] = fedex_explain_runner(query, first_dataset, second_dataset,
+                                                                require_json_output)
         elif query.explainer == 'outlier':
-            all_results_dict[str(query)] = outlier_explain_runner(query, first_dataset, second_dataset, require_json_output)
+            all_results_dict[str(query)] = outlier_explain_runner(query, first_dataset, second_dataset,
+                                                                  require_json_output)
         else:
             all_results_dict[str(query)] = {'error': f"Explainer {query.explainer} not supported."}
 
@@ -445,7 +474,21 @@ def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_da
     return all_results_dict
 
 
+def set_working_directory():
+    working_directory = os.getcwd()
+    if not working_directory.endswith('tests'):
+        # If the working directory ends with FEDEx_generator, we can easily move to the tests directory.
+        if working_directory.endswith('FEDEx_Generator'):
+            os.chdir('tests')
+        else:
+            # Print a warning that the working directory is not FEDEx_generator/tests, and thus relative paths may not work.
+            print(
+                "Warning: The working directory is not FEDEx_Generator/tests. Relative paths to this directory may not work and cause errors.")
+
+
 def main():
+    set_working_directory()
+
     if len(sys.argv) < 4:
         print(
             "Usage: python extract_intermediate_results.py <first_dataset> <query_file> <output_file> <optional: second_dataset>")
@@ -456,16 +499,22 @@ def main():
     output_file = sys.argv[3]
     second_dataset_path = sys.argv[4] if len(sys.argv) == 5 else None
 
-    queries = get_queries(query_file)
+    queries, global_select, global_select_second = get_queries(query_file)
     first_dataset = pd.read_csv(input_file)
+
+    # Apply global level select operations to the dataset
+    if global_select:
+        first_dataset = first_dataset[global_select]
+
     if second_dataset_path:
         second_dataset = pd.read_csv(second_dataset_path)
     else:
         second_dataset = None
 
+    if global_select_second:
+        second_dataset = second_dataset[global_select_second]
+
     all_results_dict = run_on_all_queries(queries, first_dataset, second_dataset)
-
-
 
     # Save the paths to the datasets. This serves as a backup - in case the user did not provide file paths,
     # as well as for convenience - so the test can automatically run on the datasets without the need for manual input.
@@ -484,6 +533,11 @@ def main():
             all_results_dict['second_dataset_name'] = second_dataset_path.split('\\')[-1].split('.')[0]
     else:
         all_results_dict['second_dataset_name'] = None
+
+    if global_select:
+        all_results_dict['global_select'] = global_select
+    if global_select_second:
+        all_results_dict['global_select_second'] = global_select_second
 
     # Save the dictionary to a JSON file
     with open(output_file, 'w') as f:
