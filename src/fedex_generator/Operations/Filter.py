@@ -217,7 +217,6 @@ class Filter(Operation.Operation):
 
         # Add the notes to the figures and show them.
         plt.figtext(0, 0, txt, horizontalalignment='left', verticalalignment='top')
-        plt.show()
 
     def delete_correlated_atts(self, measure, TH=0.7):
         """
