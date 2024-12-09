@@ -81,7 +81,7 @@ The script will run the queries in the query file on the dataset, and extract th
 creating a results file that can be used for testing.\
 
 ## Downloading the default datasets
-To download all of the default datasets, you can run the `download_datasets_util.py` script:
+To download all of the default datasets for which query files and result files are already provided, you can run the `download_datasets_util.py` script:
 ```bash
 python download_datasets_util.py
 ```
@@ -91,3 +91,7 @@ The default datasets are those present in the pd-explain repository:
 - spotify_all.csv
 - bank_churners_user_study.csv
 - houses.csv
+
+These datasets will be downloaded into resources/datasets.\
+\
+Please note that this is not required. The test script will also automatically download these datasets, if no other dataset was specified and the datasets have not already been downloaded and placed in resources/datasets.
