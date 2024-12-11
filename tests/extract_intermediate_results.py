@@ -22,6 +22,7 @@ This script can be used with any dataset and query file, as long as the queries 
 import os
 
 import numpy as np
+import numpy.random
 from numpy import ndarray, dtype
 
 from fedex_generator.Measures.Bins import Bins
@@ -43,6 +44,7 @@ from pandas import DataFrame, Series
 import random
 
 random.seed(42)
+numpy.random.seed(42)
 
 from fedex_generator.commons.consts import SIGNIFICANCE_THRESHOLD
 

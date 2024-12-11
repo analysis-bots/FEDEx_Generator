@@ -1,4 +1,6 @@
 import json
+
+import numpy.random
 import pandas as pd
 from extract_intermediate_results import run_on_all_queries, Query, set_working_directory
 import sys
@@ -10,6 +12,7 @@ import warnings
 import random
 
 random.seed(42)
+numpy.random.seed(42)
 import test_utils as tu
 import test_consts as consts
 
