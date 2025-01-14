@@ -269,7 +269,7 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
     for score, max_col_name, bins, _ in list_scores_sorted[:-k - 1:-1]:
         source_name, bins, score, _ = score_dict[max_col_name]
         for current_bin in bins.bins:
-            influence_vals = measure.get_influence_col(max_col_name, current_bin, False)
+            influence_vals = measure.get_influence_col(current_bin)
             influence_vals_list = np.array(list(influence_vals.values()))
 
             saved_influence_vals.append({
