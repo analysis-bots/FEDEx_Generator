@@ -406,10 +406,10 @@ def ks_2samp(data1, data2, alternative='two-sided', mode='asymp'):
     if alternative not in ['two-sided', 'less', 'greater']:
         raise ValueError(f'Invalid value for alternative: {alternative}')
     MAX_AUTO_N = 10000  # 'auto' will attempt to be exact if n1,n2 <= MAX_AUTO_N
-    #np.random.shuffle(data1)
-    #np.random.shuffle(data2)
-    #data1 = data1[:5000]
-    #data2 = data2[:5000]
+    # np.random.shuffle(data1)
+    # np.random.shuffle(data2)
+    # data1 = data1[:5000]
+    # data2 = data2[:5000]
     if np.ma.is_masked(data1):
         data1 = data1.compressed()
     if np.ma.is_masked(data2):

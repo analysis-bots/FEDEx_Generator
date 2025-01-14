@@ -5,6 +5,13 @@ from fedex_generator.commons import utils
 
 
 class NormalizedDiversityMeasure(DiversityMeasure):
+    """
+    A normalized version of the diversity measure.\n
+    See the DiversityMeasure class for more information.\n
+    The only difference is in the calculation of the variance. The square root of the variance is divided by the mean
+    of the appearances of the values in the array, where as in the DiversityMeasure class, this is not done.
+    """
+
     def __init__(self):
         super().__init__()
 
