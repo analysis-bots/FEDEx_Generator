@@ -59,6 +59,7 @@ class Filter(Operation.Operation):
             self.result_df = result_df
             self.result_name = utils.get_calling_params_name(result_df)
         self.source_name = utils.get_calling_params_name(source_df)
+        self._high_correlated_columns = None
 
     def get_correlated_attributes(self) -> List[str]:
         """
@@ -70,8 +71,12 @@ class Filter(Operation.Operation):
 
         :return: A list of attributes that are highly correlated with the specified attribute.
         """
-        # For performance, we only take the first 10000 rows.
-        numeric_df = self.source_df.head(10000)
+        # Avoid repeating the calculation every single time.
+        if self._high_correlated_columns is not None:
+            return self._high_correlated_columns
+        # For performance, we only take the first 10000 rows. We also copy the df because otherwise we
+        # are modifying the original df.
+        numeric_df = self.source_df.head(10000).copy()
 
         # For every non-numeric column, we map it to a numeric value by sorting the unique values and assigning
         # them a number.
@@ -82,7 +87,9 @@ class Filter(Operation.Operation):
 
                 items = sorted(numeric_df[column].dropna().unique())
                 items_map = dict(zip(items, range(len(items))))
-                numeric_df[column] = numeric_df[column].map(items_map)
+                # Changed from numeric_df[column] = numeric_df[column].map(items_map) to avoid SettingWithCopyWarning
+                # and future deprecation.
+                numeric_df.loc[:, column] = numeric_df[column].map(items_map)
             except Exception as e:
                 print(e)
 
@@ -93,6 +100,8 @@ class Filter(Operation.Operation):
 
             df = df[df > 0.85].dropna()
             high_correlated_columns = list(df.index)
+
+        self._high_correlated_columns = high_correlated_columns
 
         return high_correlated_columns
 
