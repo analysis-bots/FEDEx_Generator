@@ -1,5 +1,6 @@
 import pandas as pd
 from pandas import Series, DataFrame
+from pandas.core.groupby.generic import DataFrameGroupBy
 
 from fedex_generator.commons.consts import TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
 from fedex_generator.commons import utils
@@ -19,7 +20,7 @@ class GroupBy(Operation.Operation):
     """
 
     def __init__(self, source_df, source_scheme, group_attributes, agg_dict, result_df=None, source_name=None,
-                 operation=None):
+                 operation=None, use_sampling: bool = True):
         """
         :param source_df: The source DataFrame, before the groupby operation.
         :param source_scheme: The scheme of the source DataFrame.
@@ -28,6 +29,7 @@ class GroupBy(Operation.Operation):
         :param result_df: The resulting DataFrame after the groupby operation.
         :param source_name: The name of the source DataFrame.
         :param operation: The operation to perform.
+        :param use_sampling: Whether or not to use random sampling to speed up the explanation process. Default is True.
         """
         super().__init__(source_scheme)
         # Set the attributes
@@ -47,6 +49,12 @@ class GroupBy(Operation.Operation):
         else:
             self.result_df = result_df
             self.result_name = utils.get_calling_params_name(result_df)
+
+        # We can't sample a DataFrameGroupBy. If the result is one, there should still be steps to perform,
+        # which will create a new GroupBy object.
+        if use_sampling and not isinstance(self.result_df, DataFrameGroupBy):
+            self.source_df = self.sample(self.source_df)
+            self.result_df = self.sample(self.result_df)
 
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
         """

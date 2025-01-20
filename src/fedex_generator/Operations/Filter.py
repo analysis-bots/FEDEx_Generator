@@ -32,7 +32,7 @@ class Filter(Operation.Operation):
     """
 
     def __init__(self, source_df: DataFrame, source_scheme: dict, attribute: str = None,
-                 operation_str: str = None, value=None, result_df: DataFrame = None):
+                 operation_str: str = None, value=None, result_df: DataFrame = None, use_sampling: bool = True):
         """
         :param source_df: The source DataFrame, before the filter operation.
         :param source_scheme: The scheme of the source DataFrame.
@@ -40,6 +40,8 @@ class Filter(Operation.Operation):
         :param operation_str: The operation to perform. Only needed if result_df is None.
         :param value: The value to filter by. Only needed if result_df is None.
         :param result_df: The resulting DataFrame after the filter operation.
+        :param use_sampling: Whether to use sampling to speed up the generation of explanations. Note that this may
+        affect the accuracy and quality of the explanations. Default is True.
         """
         super().__init__(source_scheme)
         self.source_df = source_df.reset_index()
@@ -58,6 +60,10 @@ class Filter(Operation.Operation):
         else:
             self.result_df = result_df
             self.result_name = utils.get_calling_params_name(result_df)
+
+        if use_sampling:
+            self.source_df = self.sample(self.source_df)
+            self.result_df = self.sample(self.result_df)
         self.source_name = utils.get_calling_params_name(source_df)
         self._high_correlated_columns = None
 
@@ -171,6 +177,10 @@ class Filter(Operation.Operation):
         if schema is None:
             schema = {}
 
+        # if use_sampling:
+        #     source_df_backup, result_df_backup = self.source_df, self.result_df
+        #     self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
+
         # The measure used for filer operations is always the ExceptionalityMeasure.
         measure = ExceptionalityMeasure()
         scores = measure.calc_measure(self, schema, attributes)
@@ -182,6 +192,9 @@ class Filter(Operation.Operation):
                                          show_scores=show_scores, title=title)
         if figures:
             self.correlated_notes(figures, top_k)
+
+        # if use_sampling:
+        #     self.source_df, self.result_df = source_df_backup, result_df_backup
         return None
 
     def present_deleted_correlated(self, figs_in_row: int = DEFAULT_FIGS_IN_ROW):

@@ -16,7 +16,7 @@ class Join(Operation.Operation):
     Provides a .explain() method for explaining the operation, as well as methods used for producing the explanation.
     """
     def __init__(self, left_df: DataFrame, right_df: DataFrame, source_scheme: dict, attribute: str,
-                 result_df: DataFrame=None, left_name: str=None, right_name: str=None):
+                 result_df: DataFrame=None, left_name: str=None, right_name: str=None, use_sampling: bool = True):
         """
         :param left_df: DataFrame to join on the left side.
         :param right_df: DataFrame to join on the right side.
@@ -25,6 +25,7 @@ class Join(Operation.Operation):
         :param result_df: The resulting DataFrame after the join operation. Optional.
         :param left_name: Name of the left DataFrame. Optional.
         :param right_name: Name of the right DataFrame. Optional.
+        :param use_sampling: Whether or not to use random sampling to speed up the explanation process. Default is True.
         """
         super().__init__(source_scheme)
         self.source_scheme = source_scheme
@@ -44,9 +45,14 @@ class Join(Operation.Operation):
 
         self.right_name = right_name
         self.left_name = left_name
-        self.left_df = left_df
-        self.right_df = right_df
-        self.result_df = result_df
+        if use_sampling:
+            self.left_df = self.sample(left_df)
+            self.right_df = self.sample(right_df)
+            self.result_df = self.sample(result_df)
+        else:
+            self.left_df = left_df
+            self.right_df = right_df
+            self.result_df = result_df
 
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
         """
@@ -103,6 +109,7 @@ class Join(Operation.Operation):
 
         if schema is None:
             schema = {}
+
         # When using the FEDEx explainer, the exceptionality measure is used to calculate the explanation.
         measure = ExceptionalityMeasure()
         scores = measure.calc_measure(self, schema, attributes)
