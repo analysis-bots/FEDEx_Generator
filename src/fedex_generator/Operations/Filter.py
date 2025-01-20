@@ -62,6 +62,10 @@ class Filter(Operation.Operation):
             self.result_name = utils.get_calling_params_name(result_df)
 
         if use_sampling:
+            # If sampling is used, we want to have a backup of the original source and result DataFrames, for
+            # any potential future need of them.
+            self.unsampled_source_df = source_df
+            self.unsampled_result_df = self.result_df
             self.source_df = self.sample(self.source_df)
             self.result_df = self.sample(self.result_df)
         self.source_name = utils.get_calling_params_name(source_df)

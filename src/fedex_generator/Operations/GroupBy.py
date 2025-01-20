@@ -48,13 +48,19 @@ class GroupBy(Operation.Operation):
             self.result_df = source_df.groupby(group_attributes).agg(agg_dict)
         else:
             self.result_df = result_df
+
             self.result_name = utils.get_calling_params_name(result_df)
 
         # We can't sample a DataFrameGroupBy. If the result is one, there should still be steps to perform,
         # which will create a new GroupBy object.
         if use_sampling and not isinstance(self.result_df, DataFrameGroupBy):
+            # If sampling is used, we want to keep an unsampled version of the source and result
+            # DataFrame for any future need we may have of it.
+            self.unsampled_source_df = source_df
+            self.unsampled_result_df = result_df
             self.source_df = self.sample(self.source_df)
             self.result_df = self.sample(self.result_df)
+
 
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
         """

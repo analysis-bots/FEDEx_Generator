@@ -46,6 +46,10 @@ class Join(Operation.Operation):
         self.right_name = right_name
         self.left_name = left_name
         if use_sampling:
+            # If sampling is used, we store the original, unsampled dataframes, for any future use.
+            self.unsampled_left_df = left_df
+            self.unsampled_right_df = right_df
+            self.unsampled_result_df = result_df
             self.left_df = self.sample(left_df)
             self.right_df = self.sample(right_df)
             self.result_df = self.sample(result_df)
