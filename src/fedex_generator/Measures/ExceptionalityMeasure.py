@@ -138,7 +138,7 @@ class ExceptionalityMeasure(BaseMeasure):
         s = s[s == s]
         r = np.array(r)
         r = r[r == r]
-        return 0 if len(r) == 0 else utils.ks_2samp(s, r).statistic
+        return 0 if (len(r) == 0 or len(s) == 0) else utils.ks_2samp(s, r).statistic
 
     def calc_influence_col(self, current_bin: Bin):
         # Get the source and result columns

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from typing import List, Tuple, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fedex_generator.Measures.BaseMeasure import BaseMeasure
 from fedex_generator.commons import utils
@@ -358,10 +359,14 @@ class OutlierMeasure(BaseMeasure):
         df_agg_consider = df_agg  # [control]
 
         # Iterate over the attributes, calculate the influence score, and generate predicates.
-        for attr in attrs:
-            preds = self.compute_predicates_per_attribute(attr, df_in, g_att, g_agg, agg_method, target, dir,
-                                                           df_in_consider, df_agg_consider)
-            predicates += preds
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(self.compute_predicates_per_attribute, attr, df_in, g_att, g_agg, agg_method, target,
+                                dir, df_in_consider, df_agg_consider) for attr in attrs
+            ]
+            for future in as_completed(futures):
+                preds = future.result()
+                predicates += preds
 
 
         # Sort the predicates by influence score in descending order.

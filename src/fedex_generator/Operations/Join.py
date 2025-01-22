@@ -48,6 +48,7 @@ class Join(Operation.Operation):
         self.right_df = right_df
         self.result_df = result_df
 
+
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
         """
         Iterate over the attributes of the left and right DataFrames.
@@ -70,7 +71,8 @@ class Join(Operation.Operation):
 
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[]):
+                corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
+                use_sampling: bool = True):
         """
         Explain for filter operation
 
@@ -80,9 +82,15 @@ class Join(Operation.Operation):
         :param show_scores: show scores on explanation
         :param figs_in_row: number of explanations figs in one row
         :param title: explanation title
+        :param use_sampling: whether to use sampling or not
 
         :return: explain figures
         """
+
+        if use_sampling:
+            backup_left_df, backup_right_df, backup_res_df = self.left_df, self.right_df, self.result_df
+            self.left_df, self.right_df, self.result_df = self.sample(self.left_df), self.sample(self.right_df), self.sample(self.result_df)
+
         if explainer == 'shapley':
             measure = ShapleyMeasure()
         # else: score = 0
@@ -103,9 +111,14 @@ class Join(Operation.Operation):
 
         if schema is None:
             schema = {}
+
         # When using the FEDEx explainer, the exceptionality measure is used to calculate the explanation.
         measure = ExceptionalityMeasure()
         scores = measure.calc_measure(self, schema, attributes)
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
+
+        if use_sampling:
+            self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
+
         return figures
