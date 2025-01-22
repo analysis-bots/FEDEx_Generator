@@ -4,14 +4,15 @@ import numpy as np
 
 from fedex_generator.commons.consts import TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
 
+SAMPLE_SIZE = 5000
+RANDOM_SEED = 42
+
 
 class Operation:
     """
     An abstract class for operations within the FEDEx explainability framework.\n
     All implemented operations should inherit from this class.
     """
-
-    SAMPLE_SIZE = 5000
 
     def __init__(self, scheme: dict):
         """
@@ -67,5 +68,7 @@ class Operation:
         if df.shape[0] <= sample_size:
             return df
         else:
-            uniform_indexes = np.random.choice(df.index, sample_size, replace=False)
+            # We use a set seed so that the user will always get the same explanation when using sampling.
+            generator = np.random.default_rng(RANDOM_SEED)
+            uniform_indexes = generator.choice(df.index, sample_size, replace=False)
             return df.loc[uniform_indexes]

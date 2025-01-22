@@ -20,7 +20,7 @@ class GroupBy(Operation.Operation):
     """
 
     def __init__(self, source_df, source_scheme, group_attributes, agg_dict, result_df=None, source_name=None,
-                 operation=None, use_sampling: bool = True):
+                 operation=None):
         """
         :param source_df: The source DataFrame, before the groupby operation.
         :param source_scheme: The scheme of the source DataFrame.
@@ -29,7 +29,6 @@ class GroupBy(Operation.Operation):
         :param result_df: The resulting DataFrame after the groupby operation.
         :param source_name: The name of the source DataFrame.
         :param operation: The operation to perform.
-        :param use_sampling: Whether or not to use random sampling to speed up the explanation process. Default is True.
         """
         super().__init__(source_scheme)
         # Set the attributes
@@ -48,18 +47,7 @@ class GroupBy(Operation.Operation):
             self.result_df = source_df.groupby(group_attributes).agg(agg_dict)
         else:
             self.result_df = result_df
-
             self.result_name = utils.get_calling_params_name(result_df)
-
-        # We can't sample a DataFrameGroupBy. If the result is one, there should still be steps to perform,
-        # which will create a new GroupBy object.
-        if use_sampling and not isinstance(self.result_df, DataFrameGroupBy):
-            # If sampling is used, we want to keep an unsampled version of the source and result
-            # DataFrame for any future need we may have of it.
-            self.unsampled_source_df = source_df
-            self.unsampled_result_df = result_df
-            self.source_df = self.sample(self.source_df)
-            self.result_df = self.sample(self.result_df)
 
 
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
@@ -82,7 +70,7 @@ class GroupBy(Operation.Operation):
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT, explainer: str='fedex',
                 target=None, dir: str | int=None, control=None, hold_out=[],
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[]):
+                corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[], use_sampling=True):
         """
         Explain for group by operation
         :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
@@ -92,9 +80,14 @@ class GroupBy(Operation.Operation):
         :param figs_in_row: number of explanations figs in one row
         :param title: explanation title
         :param dir: direction of the outlier. Can be 'high' or 'low', or the corresponding integer values 1 and -1 (HIGH and LOW constants).
+        :param use_sampling: whether to use sampling for the explanation
 
         :return: explain figures
         """
+
+        if use_sampling:
+            backup_source_df, backup_res_df = self.source_df, self.result_df
+            self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
 
         if explainer == 'outlier':
             res_col = None
@@ -136,6 +129,10 @@ class GroupBy(Operation.Operation):
         scores = measure.calc_measure(self, schema, attributes, ignore=ignore)
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
+
+        if use_sampling:
+            self.source_df, self.result_df = backup_source_df, backup_res_df
+
         return figures
 
     @staticmethod

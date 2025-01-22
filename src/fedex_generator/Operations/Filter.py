@@ -32,7 +32,7 @@ class Filter(Operation.Operation):
     """
 
     def __init__(self, source_df: DataFrame, source_scheme: dict, attribute: str = None,
-                 operation_str: str = None, value=None, result_df: DataFrame = None, use_sampling: bool = True):
+                 operation_str: str = None, value=None, result_df: DataFrame = None):
         """
         :param source_df: The source DataFrame, before the filter operation.
         :param source_scheme: The scheme of the source DataFrame.
@@ -61,13 +61,6 @@ class Filter(Operation.Operation):
             self.result_df = result_df
             self.result_name = utils.get_calling_params_name(result_df)
 
-        if use_sampling:
-            # If sampling is used, we want to have a backup of the original source and result DataFrames, for
-            # any potential future need of them.
-            self.unsampled_source_df = source_df
-            self.unsampled_result_df = self.result_df
-            self.source_df = self.sample(self.source_df)
-            self.result_df = self.sample(self.result_df)
         self.source_name = utils.get_calling_params_name(source_df)
         self._high_correlated_columns = None
 
@@ -155,7 +148,8 @@ class Filter(Operation.Operation):
 
     def explain(self, schema=None, attributes=None, top_k=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[]) -> None:
+                corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
+                use_sampling: bool = True) -> None:
         """
         Explain for filter operation
 
@@ -171,9 +165,14 @@ class Filter(Operation.Operation):
         :param cont: Unused but kept for compatibility.
         :param attr: Unused but kept for compatibility.
         :param ignore: Unused but kept for compatibility.
+        :param use_sampling: Whether to use sampling to speed up the generation of explanations.
 
         :return: explain figures
         """
+
+        if use_sampling:
+            source_df_backup, result_df_backup = self.source_df, self.result_df
+            self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
 
         if attributes is None:
             attributes = []
@@ -197,8 +196,9 @@ class Filter(Operation.Operation):
         if figures:
             self.correlated_notes(figures, top_k)
 
-        # if use_sampling:
-        #     self.source_df, self.result_df = source_df_backup, result_df_backup
+        if use_sampling:
+            self.source_df, self.result_df = source_df_backup, result_df_backup
+
         return None
 
     def present_deleted_correlated(self, figs_in_row: int = DEFAULT_FIGS_IN_ROW):
