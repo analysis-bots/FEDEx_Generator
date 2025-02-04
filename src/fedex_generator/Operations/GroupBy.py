@@ -70,7 +70,8 @@ class GroupBy(Operation.Operation):
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT, explainer: str='fedex',
                 target=None, dir: str | int=None, control=None, hold_out=[],
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[], use_sampling=True):
+                corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[],
+                use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE):
         """
         Explain for group by operation
         :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
@@ -80,14 +81,11 @@ class GroupBy(Operation.Operation):
         :param figs_in_row: number of explanations figs in one row
         :param title: explanation title
         :param dir: direction of the outlier. Can be 'high' or 'low', or the corresponding integer values 1 and -1 (HIGH and LOW constants).
-        :param use_sampling: whether to use sampling for the explanation
+        :param use_sampling: whether to use sampling for the explanation.
+        :param sample_size: the sample size to use when sampling the data. Can be an integer or a float between 0 and 1. Default is 5000.
 
         :return: explain figures
         """
-
-        if use_sampling:
-            backup_source_df, backup_res_df = self.source_df, self.result_df
-            self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
 
         if explainer == 'outlier':
             res_col = None
@@ -124,14 +122,24 @@ class GroupBy(Operation.Operation):
         if attributes is None:
             attributes = []
 
+
+        if use_sampling:
+            backup_source_df, backup_res_df = self.source_df, self.result_df
+            self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
+
         # Unless the outlier explainer is used, the diversity measure is always used for the groupby operation.
         measure = DiversityMeasure()
         scores = measure.calc_measure(self, schema, attributes, ignore=ignore)
+        if use_sampling:
+            self.source_df, self.result_df = backup_source_df, backup_res_df
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
 
-        if use_sampling:
-            self.source_df, self.result_df = backup_source_df, backup_res_df
+        # Uncomment this line and remove the above copy of it to use sampling for the entire explanation process,
+        # and not just when computing the measure. This may be needed if it seems calc_influence takes too long
+        # when not using sampling. From some testing, it seems fine, but some more testing may be needed.
+        # if use_sampling:
+        #     self.source_df, self.result_df = backup_source_df, backup_res_df
 
         return figures
 

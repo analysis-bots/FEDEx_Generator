@@ -176,12 +176,11 @@ def create_operation_object(query: Query, dataset: DataFrame, second_dataset: Da
     :param second_dataset: The second dataset. Optional, and only needed for join operations.
     :return: an operation object, with the necessary parameters and the operation performed.
     """
-    use_sampling = query.arguments['use_sampling'] if 'use_sampling' in query.arguments else False
     if query.operation in operators:
         operation = Filter(
             source_df=dataset, source_scheme={},
             attribute=query.column, operation_str=query.operation,
-            value=query.arguments['value'], use_sampling=use_sampling)
+            value=query.arguments['value'])
     elif query.operation == 'groupby':
         if 'select_columns' not in query.arguments or query.arguments['select_columns'] is None:
             after_op = dataset.groupby(query.column).aggregate(query.arguments['agg_function'])
@@ -190,7 +189,7 @@ def create_operation_object(query: Query, dataset: DataFrame, second_dataset: Da
                 query.arguments['agg_function'])
         operation = GroupBy(
             source_df=dataset, source_scheme={}, agg_dict={},
-            group_attributes=[query.column], result_df=after_op, use_sampling=use_sampling
+            group_attributes=[query.column], result_df=after_op
         )
     elif query.operation == 'join':
         if second_dataset is None:
@@ -203,7 +202,7 @@ def create_operation_object(query: Query, dataset: DataFrame, second_dataset: Da
             second_dataset = second_dataset.head(1000)
         operation = Join(
             left_df=dataset, right_df=second_dataset, source_scheme={},
-            attribute=query.column, use_sampling=use_sampling
+            attribute=query.column
         )
     else:
         raise ValueError(f"Operation {query.operation} not supported.")

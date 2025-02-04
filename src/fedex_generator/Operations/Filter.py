@@ -149,7 +149,7 @@ class Filter(Operation.Operation):
     def explain(self, schema=None, attributes=None, top_k=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
-                use_sampling: bool = True) -> None:
+                use_sampling: bool = True, sample_size = Operation.SAMPLE_SIZE) -> None:
         """
         Explain for filter operation
 
@@ -166,13 +166,14 @@ class Filter(Operation.Operation):
         :param attr: Unused but kept for compatibility.
         :param ignore: Unused but kept for compatibility.
         :param use_sampling: Whether to use sampling to speed up the generation of explanations.
+        :param sample_size: The sample size to use when using sampling. Can be a number or a percentage of the dataframe size. Default is 5000.
 
         :return: explain figures
         """
 
         if use_sampling:
             source_df_backup, result_df_backup = self.source_df, self.result_df
-            self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
+            self.source_df, self.result_df = self.sample(self.source_df, sample_size), self.sample(self.result_df, sample_size)
 
         if attributes is None:
             attributes = []
@@ -189,15 +190,19 @@ class Filter(Operation.Operation):
         scores = measure.calc_measure(self, schema, attributes)
 
         self.delete_correlated_atts(measure, TH=corr_TH)
-
+        if use_sampling:
+            self.source_df, self.result_df = source_df_backup, result_df_backup
         # Get the explanation figures.
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
         if figures:
             self.correlated_notes(figures, top_k)
 
-        if use_sampling:
-            self.source_df, self.result_df = source_df_backup, result_df_backup
+        # Uncomment this line and remove the above copy of it to use sampling for the entire explanation process,
+        # and not just when computing the measure. This may be needed if it seems calc_influence takes too long
+        # when not using sampling. From some testing, it seems fine, but some more testing may be needed.
+        # if use_sampling:
+        #     self.source_df, self.result_df = source_df_backup, result_df_backup
 
         return None
 

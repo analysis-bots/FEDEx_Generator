@@ -315,7 +315,10 @@ class BaseMeasure(object):
 
 
     def _calc_influence(self, score_dict, max_col_name, results_columns) -> pd.DataFrame:
-        results = pd.DataFrame([], columns=results_columns)
+        # This silly initialization is done because of the way pandas works with concatenation.
+        # Concatenating an empty dataframe with another dataframe is deprecated, so we initialize it with a single empty row.
+        # This row will be dropped later.
+        results = pd.DataFrame([["", "", "", "", "", ""]], columns=results_columns)
         source_name, bins, score, _ = score_dict[max_col_name]
 
         for current_bin in bins.bins:
@@ -344,6 +347,7 @@ class BaseMeasure(object):
                                        current_bin.get_bin_name(), max_col_name]))
                 results = pd.concat([results, pd.DataFrame([new_result])], ignore_index=True)
 
+        results = results.drop(axis='index', index=0)
         return results
 
 

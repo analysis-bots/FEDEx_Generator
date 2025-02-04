@@ -72,7 +72,7 @@ class Join(Operation.Operation):
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
-                use_sampling: bool = True):
+                use_sampling: bool = True, sample_size: int | float = Operation.SAMPLE_SIZE):
         """
         Explain for filter operation
 
@@ -83,13 +83,10 @@ class Join(Operation.Operation):
         :param figs_in_row: number of explanations figs in one row
         :param title: explanation title
         :param use_sampling: whether to use sampling or not
+        :param sample_size: the size of the sample to use. Can be a percentage of the dataframe size if below 1. Default is 5000.
 
         :return: explain figures
         """
-
-        if use_sampling:
-            backup_left_df, backup_right_df, backup_res_df = self.left_df, self.right_df, self.result_df
-            self.left_df, self.right_df, self.result_df = self.sample(self.left_df), self.sample(self.right_df), self.sample(self.result_df)
 
         if explainer == 'shapley':
             measure = ShapleyMeasure()
@@ -112,13 +109,24 @@ class Join(Operation.Operation):
         if schema is None:
             schema = {}
 
+        if use_sampling:
+            backup_left_df, backup_right_df, backup_res_df = self.left_df, self.right_df, self.result_df
+            self.left_df, self.right_df, self.result_df = self.sample(self.left_df, sample_size), self.sample(self.right_df, sample_size), self.sample(self.result_df, sample_size)
+
         # When using the FEDEx explainer, the exceptionality measure is used to calculate the explanation.
         measure = ExceptionalityMeasure()
         scores = measure.calc_measure(self, schema, attributes)
-        figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
-                                         show_scores=show_scores, title=title)
 
         if use_sampling:
             self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
+
+        figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+                                         show_scores=show_scores, title=title)
+
+        # Uncomment this line and remove the above copy of it to use sampling for the entire explanation process,
+        # and not just when computing the measure. This may be needed if it seems calc_influence takes too long
+        # when not using sampling. From some testing, it seems fine, but some more testing may be needed.
+        # if use_sampling:
+        #     self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
 
         return figures

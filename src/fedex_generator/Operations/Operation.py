@@ -58,13 +58,25 @@ class Operation:
         """
         return NotImplementedError()
 
-    def sample(self, df: pd.DataFrame, sample_size: int = SAMPLE_SIZE) -> pd.DataFrame:
+    def sample(self, df: pd.DataFrame, sample_size: int | float = SAMPLE_SIZE) -> pd.DataFrame:
         """
         Uniformly sample the dataframe to the given sample size.
         :param df: The dataframe to sample.
-        :param sample_size: The sample size to use. Default is SAMPLE_SIZE.
+        :param sample_size: The sample size to use. Default is SAMPLE_SIZE. If the sample size is below 1,
+         it is considered a percentage of the dataframe size.
         :return: The sampled dataframe.
         """
+        # If the sample size is below 1, we consider it to be a percentage of the dataframe size.
+        if sample_size <= 0:
+            raise ValueError("Sample size must be a positive number.")
+        if 0 < sample_size < 1:
+            sample_size = df.shape[0] * sample_size
+        # If the sample size is below the default sample size, we use the default sample size.
+        # We do this because we know, from empirical testing, that our default size is a good balance between
+        # performance and accuracy, and going below that size can lead to too big a loss in accuracy for
+        # a very small gain in performance.
+        if sample_size < SAMPLE_SIZE:
+            sample_size = SAMPLE_SIZE
         if df.shape[0] <= sample_size:
             return df
         else:
