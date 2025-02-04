@@ -109,24 +109,23 @@ class Join(Operation.Operation):
         if schema is None:
             schema = {}
 
+        backup_left_df, backup_right_df, backup_res_df, combined_source_df = None, None, None, None
         if use_sampling:
             backup_left_df, backup_right_df, backup_res_df = self.left_df, self.right_df, self.result_df
             self.left_df, self.right_df, self.result_df = self.sample(self.left_df, sample_size), self.sample(self.right_df, sample_size), self.sample(self.result_df, sample_size)
+            # If sampling is used, calc_measure needs an unsampled source_df to create bins for its score dict, otherwise
+            # the explanation creation will be affected by the sampling, and not just the measure calculation.
+            # Therefore, we concat the left and right DataFrames to create the unsampled source DataFrame.
+            combined_source_df = pd.concat([self.left_df, self.right_df], axis=0)
 
         # When using the FEDEx explainer, the exceptionality measure is used to calculate the explanation.
         measure = ExceptionalityMeasure()
-        scores = measure.calc_measure(self, schema, attributes)
-
-        if use_sampling:
-            self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
+        scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=combined_source_df, unsampled_res_df=backup_res_df)
 
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
 
-        # Uncomment this line and remove the above copy of it to use sampling for the entire explanation process,
-        # and not just when computing the measure. This may be needed if it seems calc_influence takes too long
-        # when not using sampling. From some testing, it seems fine, but some more testing may be needed.
-        # if use_sampling:
-        #     self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
+        if use_sampling:
+            self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
 
         return figures

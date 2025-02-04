@@ -123,23 +123,20 @@ class GroupBy(Operation.Operation):
             attributes = []
 
 
+        backup_source_df, backup_res_df = None, None
         if use_sampling:
             backup_source_df, backup_res_df = self.source_df, self.result_df
             self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
 
         # Unless the outlier explainer is used, the diversity measure is always used for the groupby operation.
         measure = DiversityMeasure()
-        scores = measure.calc_measure(self, schema, attributes, ignore=ignore)
-        if use_sampling:
-            self.source_df, self.result_df = backup_source_df, backup_res_df
+        scores = measure.calc_measure(self, schema, attributes, ignore=ignore, unsampled_source_df=backup_source_df,
+                                      unsampled_res_df=backup_res_df)
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
 
-        # Uncomment this line and remove the above copy of it to use sampling for the entire explanation process,
-        # and not just when computing the measure. This may be needed if it seems calc_influence takes too long
-        # when not using sampling. From some testing, it seems fine, but some more testing may be needed.
-        # if use_sampling:
-        #     self.source_df, self.result_df = backup_source_df, backup_res_df
+        if use_sampling:
+            self.source_df, self.result_df = backup_source_df, backup_res_df
 
         return figures
 

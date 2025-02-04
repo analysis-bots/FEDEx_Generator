@@ -122,7 +122,8 @@ class BaseMeasure(object):
 
 
     def _calc_measure(self, attr: str, dataset_relation: DatasetRelation, operation_object: Operation, scheme: dict,
-                      use_only_columns: list, ignore=None) \
+                      use_only_columns: list, ignore=None,
+                      unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) \
             -> Tuple[str, float, str, Bins, Tuple[pd.Series, pd.Series]] | Tuple[str, float, None, None, None]:
         # If the attribute is in the ignore list, skip it.
         if attr in ignore:
@@ -144,10 +145,17 @@ class BaseMeasure(object):
         if len(res_col) == 0:
             return attr, -1, None, None, None
 
+
         # Create bin candidates from the source and result columns, with a bin count specified by the operation object.
         size = operation_object.get_bins_count()
 
         bin_candidates = Bins(source_col, res_col, size)
+        unsampled_bin_candidates = None
+
+        if unsampled_source_df is not None and unsampled_res_df is not None:
+            source_col = unsampled_source_df[attr]
+            res_col = unsampled_res_df[attr]
+            unsampled_bin_candidates = Bins(source_col, res_col, size)
 
         # Compute the measure score for each bin candidate, and get the maximum score.
         measure_score = -np.inf
@@ -155,9 +163,12 @@ class BaseMeasure(object):
             measure_score = max(self.calc_measure_internal(bin_), measure_score)
 
 
-        return attr, measure_score, dataset_relation.get_source_name(), bin_candidates, (source_col, res_col)
+        return (attr, measure_score, dataset_relation.get_source_name(),
+                unsampled_bin_candidates if unsampled_bin_candidates is not None else bin_candidates,
+                (source_col, res_col))
 
-    def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore=None) -> \
+    def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore=None,
+                     unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) -> \
             Dict[str, float]:
         """
         Calculate the measure for each attribute in the operation_object.
@@ -182,7 +193,7 @@ class BaseMeasure(object):
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(self._calc_measure, attr, dataset_relation, operation_object, scheme, use_only_columns,
-                                ignore) for attr, dataset_relation in operation_object.iterate_attributes()
+                                ignore, unsampled_source_df, unsampled_res_df) for attr, dataset_relation in operation_object.iterate_attributes()
             ]
             for future in as_completed(futures):
                 attr, measure_score, source_name, bins, cols = future.result()
@@ -392,7 +403,10 @@ class BaseMeasure(object):
 
         # Create a dataframe for the results
         results_columns = ["score", "significance", "influence", "explanation", "bin", "influence_vals"]
-        results = pd.DataFrame([], columns=results_columns)
+        # This silly initialization is done because of the way pandas works with concatenation.
+        # Concatenating an empty dataframe with another dataframe is deprecated, so we initialize it with a single empty row.
+        # This row will be dropped later.
+        results = pd.DataFrame([["", "","","","",""]], columns=results_columns)
         figures = []
 
         # Iterate over the top K attributes, and get the influence values for each bin.
@@ -404,6 +418,8 @@ class BaseMeasure(object):
             ]
             for future in as_completed(futures):
                 results = pd.concat([results, future.result()], ignore_index=True)
+
+        results = results.drop(axis='index', index=0)
 
         # Compute the skyline of the results dataframe.
         results_skyline = results[results_columns[0:2]].astype("float")

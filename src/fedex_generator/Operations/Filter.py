@@ -170,6 +170,7 @@ class Filter(Operation.Operation):
 
         :return: explain figures
         """
+        source_df_backup, result_df_backup = None, None
 
         if use_sampling:
             source_df_backup, result_df_backup = self.source_df, self.result_df
@@ -181,28 +182,19 @@ class Filter(Operation.Operation):
         if schema is None:
             schema = {}
 
-        # if use_sampling:
-        #     source_df_backup, result_df_backup = self.source_df, self.result_df
-        #     self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
-
         # The measure used for filer operations is always the ExceptionalityMeasure.
         measure = ExceptionalityMeasure()
-        scores = measure.calc_measure(self, schema, attributes)
+        scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=source_df_backup, unsampled_res_df=result_df_backup)
 
         self.delete_correlated_atts(measure, TH=corr_TH)
-        if use_sampling:
-            self.source_df, self.result_df = source_df_backup, result_df_backup
         # Get the explanation figures.
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
         if figures:
             self.correlated_notes(figures, top_k)
 
-        # Uncomment this line and remove the above copy of it to use sampling for the entire explanation process,
-        # and not just when computing the measure. This may be needed if it seems calc_influence takes too long
-        # when not using sampling. From some testing, it seems fine, but some more testing may be needed.
-        # if use_sampling:
-        #     self.source_df, self.result_df = source_df_backup, result_df_backup
+        if use_sampling:
+            self.source_df, self.result_df = source_df_backup, result_df_backup
 
         return None
 
