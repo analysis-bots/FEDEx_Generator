@@ -54,7 +54,7 @@ class Query:
     column: str
     operation: str
     explainer: str
-    arguments: Dict[str, str | int | float]
+    arguments: Dict[str, str | int | float | bool]
 
     @staticmethod
     def from_string(s: str) -> 'Query':
@@ -125,6 +125,11 @@ def dict_string_to_dict(d: str) -> Dict[str, str | int | float]:
 
 
 def extract_global_select(select_str: str) -> List[str]:
+    """
+    Extract the global select operations (selects that are applied to the entire dataset across all queries) from the select string.
+    :param select_str: The select string.
+    :return: A list of global select operations.
+    """
     global_select = select_str.strip().replace('GlobalSelect=', '').replace('[', '').replace(']', '').split(',')
     for i in range(len(global_select)):
         global_select[i] = global_select[i].strip()

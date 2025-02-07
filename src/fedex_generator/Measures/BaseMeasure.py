@@ -1,4 +1,5 @@
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple, Any
 import matplotlib
 import matplotlib.pyplot as plt
@@ -119,8 +120,56 @@ class BaseMeasure(object):
 
         return source_col, res_col
 
-    def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore: list = []) -> \
-    Dict[str, float]:
+
+    def _calc_measure(self, attr: str, dataset_relation: DatasetRelation, operation_object: Operation, scheme: dict,
+                      use_only_columns: list, ignore=None,
+                      unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) \
+            -> Tuple[str, float, str, Bins, Tuple[pd.Series, pd.Series]] | Tuple[str, float, None, None, None]:
+        # If the attribute is in the ignore list, skip it.
+        if attr in ignore:
+            return attr, -1, None, None, None
+
+        # Get the column scheme from the scheme dictionary. If not found, set it to 'ni'.
+        column_scheme = scheme.get(attr, "ni").lower()
+        # If the column scheme is 'i', skip the attribute.
+        if column_scheme == "i":
+            return attr, -1, None, None, None
+
+        # If there are columns in the use_only_columns list, and the attribute is not in the list, skip it.
+        if len(use_only_columns) > 0 and attr not in use_only_columns:
+            return attr, -1, None, None, None
+
+        # Get the source and result columns for the attribute.
+        source_col, res_col = self.get_source_and_res_cols(dataset_relation, attr)
+        # If the result column is empty, skip the attribute.
+        if len(res_col) == 0:
+            return attr, -1, None, None, None
+
+
+        # Create bin candidates from the source and result columns, with a bin count specified by the operation object.
+        size = operation_object.get_bins_count()
+
+        bin_candidates = Bins(source_col, res_col, size)
+        unsampled_bin_candidates = None
+
+        if unsampled_source_df is not None and unsampled_res_df is not None:
+            source_col = unsampled_source_df[attr]
+            res_col = unsampled_res_df[attr]
+            unsampled_bin_candidates = Bins(source_col, res_col, size)
+
+        # Compute the measure score for each bin candidate, and get the maximum score.
+        measure_score = -np.inf
+        for bin_ in bin_candidates.bins:
+            measure_score = max(self.calc_measure_internal(bin_), measure_score)
+
+
+        return (attr, measure_score, dataset_relation.get_source_name(),
+                unsampled_bin_candidates if unsampled_bin_candidates is not None else bin_candidates,
+                (source_col, res_col))
+
+    def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore=None,
+                     unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) -> \
+            Dict[str, float]:
         """
         Calculate the measure for each attribute in the operation_object.
 
@@ -131,48 +180,25 @@ class BaseMeasure(object):
         """
         # Set the operation object, the scheme, and the score dictionary to the given values.
         # Also initialize the max_val to -1.
+        if ignore is None:
+            ignore = []
+
         self.operation_object = operation_object
         self.score_dict = {}
         self.max_val = -1
         self.scheme = scheme
 
         # Iterate over the attributes in the operation object.
-        for attr, dataset_relation in operation_object.iterate_attributes():
-            # If the attribute is in the ignore list, skip it.
-            if attr in ignore:
-                continue
-
-            # Get the column scheme from the scheme dictionary. If not found, set it to 'ni'.
-            column_scheme = scheme.get(attr, "ni").lower()
-            # If the column scheme is 'i', skip the attribute.
-            if column_scheme == "i":
-                continue
-
-            # If there are columns in the use_only_columns list, and the attribute is not in the list, skip it.
-            if len(use_only_columns) > 0 and attr not in use_only_columns:
-                continue
-
-            # Get the source and result columns for the attribute.
-            source_col, res_col = self.get_source_and_res_cols(dataset_relation, attr)
-            # If the result column is empty, skip the attribute.
-            if len(res_col) == 0:
-                continue
-
-            # Create bin candidates from the source and result columns, with a bin count specified by the operation object.
-            size = operation_object.get_bins_count()
-
-            bin_candidates = Bins(source_col, res_col, size)
-
-            # Compute the measure score for each bin candidate, and get the maximum score.
-            measure_score = -np.inf
-            for bin_ in bin_candidates.bins:
-                measure_score = max(self.calc_measure_internal(bin_), measure_score)
-
-            # Update the score dictionary with the attribute, the source name,
-            # the bin candidates, the measure score,
-            # and the source and result columns after computing the measure score.
-            self.score_dict[attr] = (
-                dataset_relation.get_source_name(), bin_candidates, measure_score, (source_col, res_col))
+        # From limited testing, doing this in parallel gives a small performance boost.
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(self._calc_measure, attr, dataset_relation, operation_object, scheme, use_only_columns,
+                                ignore, unsampled_source_df, unsampled_res_df) for attr, dataset_relation in operation_object.iterate_attributes()
+            ]
+            for future in as_completed(futures):
+                attr, measure_score, source_name, bins, cols = future.result()
+                if measure_score != -1:
+                    self.score_dict[attr] = (source_name, bins, measure_score, cols)
 
         # Get the maximum value from the score dictionary and set it to the max_val attribute.
         self.max_val = max([kl_val for _, _, kl_val, _ in self.score_dict.values()])
@@ -298,6 +324,44 @@ class BaseMeasure(object):
 
         return (influence - influence_mean) / np.sqrt(influence_var)
 
+
+    def _calc_influence(self, score_dict, max_col_name, results_columns) -> pd.DataFrame:
+        # This silly initialization is done because of the way pandas works with concatenation.
+        # Concatenating an empty dataframe with another dataframe is deprecated, so we initialize it with a single empty row.
+        # This row will be dropped later.
+        results = pd.DataFrame([["", "", "", "", "", ""]], columns=results_columns)
+        source_name, bins, score, _ = score_dict[max_col_name]
+
+        for current_bin in bins.bins:
+            # Compute the influence values for the current bin.
+            influence_vals = self.get_influence_col(current_bin)
+            influence_vals_list = np.array(list(influence_vals.values()))
+
+            # If all the influence values are NaN, skip the current bin.
+            if np.all(np.isnan(influence_vals_list)):
+                continue
+
+            # Get the top k (1 in this case) attribute indexes and their corresponding influence values.
+            max_values, max_influences = self.get_max_k(influence_vals, 1)
+
+            # Iterate over the top k attributes and their influence values.
+            # Compute the significance of the influence value, and if it is above the threshold, build an explanation.
+            for max_value, influence_val in zip(max_values, max_influences):
+                significance = self.get_significance(influence_val, influence_vals_list)
+                if significance < SIGNIFICANCE_THRESHOLD:
+                    continue
+                explanation = self.build_explanation(current_bin, max_col_name, max_value, source_name)
+
+                # Save the results in a dictionary and append it to the results dataframe.
+                new_result = dict(zip(results_columns,
+                                      [score, significance, influence_val, explanation, current_bin, influence_vals,
+                                       current_bin.get_bin_name(), max_col_name]))
+                results = pd.concat([results, pd.DataFrame([new_result])], ignore_index=True)
+
+        results = results.drop(axis='index', index=0)
+        return results
+
+
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                        deleted=None) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure]:
@@ -339,38 +403,23 @@ class BaseMeasure(object):
 
         # Create a dataframe for the results
         results_columns = ["score", "significance", "influence", "explanation", "bin", "influence_vals"]
-        results = pd.DataFrame([], columns=results_columns)
+        # This silly initialization is done because of the way pandas works with concatenation.
+        # Concatenating an empty dataframe with another dataframe is deprecated, so we initialize it with a single empty row.
+        # This row will be dropped later.
+        results = pd.DataFrame([["", "","","","",""]], columns=results_columns)
         figures = []
 
         # Iterate over the top K attributes, and get the influence values for each bin.
-        for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]:
-            source_name, bins, score, _ = score_dict[max_col_name]
+        # From limited testing, doing this in parallel gives a small performance boost.
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(self._calc_influence, score_dict, max_col_name, results_columns)
+                for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]
+            ]
+            for future in as_completed(futures):
+                results = pd.concat([results, future.result()], ignore_index=True)
 
-            for current_bin in bins.bins:
-                # Compute the influence values for the current bin.
-                influence_vals = self.get_influence_col(current_bin)
-                influence_vals_list = np.array(list(influence_vals.values()))
-
-                # If all the influence values are NaN, skip the current bin.
-                if np.all(np.isnan(influence_vals_list)):
-                    continue
-
-                # Get the top k (1 in this case) attribute indexes and their corresponding influence values.
-                max_values, max_influences = self.get_max_k(influence_vals, 1)
-
-                # Iterate over the top k attributes and their influence values.
-                # Compute the significance of the influence value, and if it is above the threshold, build an explanation.
-                for max_value, influence_val in zip(max_values, max_influences):
-                    significance = self.get_significance(influence_val, influence_vals_list)
-                    if significance < SIGNIFICANCE_THRESHOLD:
-                        continue
-                    explanation = self.build_explanation(current_bin, max_col_name, max_value, source_name)
-
-                    # Save the results in a dictionary and append it to the results dataframe.
-                    new_result = dict(zip(results_columns,
-                                          [score, significance, influence_val, explanation, current_bin, influence_vals,
-                                           current_bin.get_bin_name(), max_col_name]))
-                    results = pd.concat([results, pd.DataFrame([new_result])], ignore_index=True)
+        results = results.drop(axis='index', index=0)
 
         # Compute the skyline of the results dataframe.
         results_skyline = results[results_columns[0:2]].astype("float")
@@ -381,6 +430,8 @@ class BaseMeasure(object):
         bins = results[skyline]["bin"]
         influence_vals = results[skyline]["influence_vals"]
         scores = results[skyline]["score"]
+
+        source_name = score_dict[list_scores_sorted[-1][1]][0]
 
         # If there are no interesting explanations, print a message and return.
         if len(scores) == 0:

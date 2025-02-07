@@ -48,6 +48,7 @@ class Join(Operation.Operation):
         self.right_df = right_df
         self.result_df = result_df
 
+
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
         """
         Iterate over the attributes of the left and right DataFrames.
@@ -70,7 +71,8 @@ class Join(Operation.Operation):
 
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[]):
+                corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
+                use_sampling: bool = True, sample_size: int | float = Operation.SAMPLE_SIZE):
         """
         Explain for filter operation
 
@@ -80,9 +82,12 @@ class Join(Operation.Operation):
         :param show_scores: show scores on explanation
         :param figs_in_row: number of explanations figs in one row
         :param title: explanation title
+        :param use_sampling: whether to use sampling or not
+        :param sample_size: the size of the sample to use. Can be a percentage of the dataframe size if below 1. Default is 5000.
 
         :return: explain figures
         """
+
         if explainer == 'shapley':
             measure = ShapleyMeasure()
         # else: score = 0
@@ -103,9 +108,24 @@ class Join(Operation.Operation):
 
         if schema is None:
             schema = {}
+
+        backup_left_df, backup_right_df, backup_res_df, combined_source_df = None, None, None, None
+        if use_sampling:
+            backup_left_df, backup_right_df, backup_res_df = self.left_df, self.right_df, self.result_df
+            self.left_df, self.right_df, self.result_df = self.sample(self.left_df, sample_size), self.sample(self.right_df, sample_size), self.sample(self.result_df, sample_size)
+            # If sampling is used, calc_measure needs an unsampled source_df to create bins for its score dict, otherwise
+            # the explanation creation will be affected by the sampling, and not just the measure calculation.
+            # Therefore, we concat the left and right DataFrames to create the unsampled source DataFrame.
+            combined_source_df = pd.concat([self.left_df, self.right_df], axis=0)
+
         # When using the FEDEx explainer, the exceptionality measure is used to calculate the explanation.
         measure = ExceptionalityMeasure()
-        scores = measure.calc_measure(self, schema, attributes)
+        scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=combined_source_df, unsampled_res_df=backup_res_df)
+
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                          show_scores=show_scores, title=title)
+
+        if use_sampling:
+            self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
+
         return figures
