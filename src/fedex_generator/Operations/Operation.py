@@ -70,7 +70,7 @@ class Operation:
         if sample_size <= 0:
             raise ValueError("Sample size must be a positive number.")
         if 0 < sample_size < 1:
-            sample_size = df.shape[0] * sample_size
+            sample_size = int(df.shape[0] * sample_size)
         # If the sample size is below the default sample size, we use the default sample size.
         # We do this because we know, from empirical testing, that our default size is a good balance between
         # performance and accuracy, and going below that size can lead to too big a loss in accuracy for
