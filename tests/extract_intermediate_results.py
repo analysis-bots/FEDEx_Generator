@@ -31,7 +31,6 @@ from fedex_generator.Operations.GroupBy import GroupBy
 from fedex_generator.Operations.Join import Join
 from fedex_generator.Measures.DiversityMeasure import DiversityMeasure
 from fedex_generator.Measures.ExceptionalityMeasure import ExceptionalityMeasure
-from fedex_generator.Measures.OutlierMeasure import OutlierMeasure
 from fedex_generator.Operations.Operation import Operation
 from fedex_generator.Measures.BaseMeasure import BaseMeasure
 
@@ -42,6 +41,7 @@ from dataclasses import dataclass
 import pandas as pd
 from pandas import DataFrame, Series
 import random
+from external_explainers import OutlierExplainer
 
 random.seed(42)
 numpy.random.seed(42)
@@ -398,7 +398,7 @@ def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_datase
         results_dict['error'] = 'Outlier explanation is currently only supported for groupby operations.'
         return results_dict
 
-    measure = OutlierMeasure()
+    measure = OutlierExplainer()
 
     preds = []
 

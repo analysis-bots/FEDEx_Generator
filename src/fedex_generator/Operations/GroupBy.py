@@ -8,7 +8,7 @@ from fedex_generator.commons.DatasetRelation import DatasetRelation
 from fedex_generator.Operations import Operation
 from fedex_generator.Measures.NormalizedDiversityMeasure import NormalizedDiversityMeasure
 from fedex_generator.Measures.DiversityMeasure import DiversityMeasure
-from fedex_generator.Measures.OutlierMeasure import OutlierMeasure, HIGH, LOW
+from external_explainers import OutlierExplainer
 
 from typing import Generator, List, Tuple
 
@@ -89,12 +89,13 @@ class GroupBy(Operation.Operation):
 
         if explainer == 'outlier':
             res_col = None
-            measure = OutlierMeasure()
+            measure = OutlierExplainer()
 
             # Get the result column. Despite this being a loop - the 2nd returned value of iterate_attributes is always the same.
             # The change is only in the ignored first value. We simply need a loop to use the generator.
             for attr, dataset_relation in self.iterate_attributes():
-                _, res_col = OutlierMeasure.get_source_and_res_cols(dataset_relation, attr)
+                _, res_col = dataset_relation.get_source(attr), dataset_relation.get_result(attr)
+                res_col = res_col[~res_col.isnull()]
                 break
 
             # Get the aggregation attribute and method
@@ -105,16 +106,16 @@ class GroupBy(Operation.Operation):
             agg_attr, agg_method = agg[0], agg[1][0]
 
             if dir == 'high':
-                dir = HIGH
+                dir = 1
             elif dir == 'low':
-                dir = LOW
+                dir = -1
 
             if type(self.group_attributes) == list:
                 g_attr = self.group_attributes[0]
             else:
                 g_attr = self.group_attributes
 
-            return measure.explain_outlier(res_col, self.source_df, g_attr, agg_attr, agg_method, target, dir, control,
+            return measure.explain(res_col, self.source_df, g_attr, agg_attr, agg_method, target, dir, control,
                                            hold_out)
         if schema is None:
             schema = {}
