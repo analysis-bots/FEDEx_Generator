@@ -1,14 +1,11 @@
 import pandas as pd
-from pandas import Series, DataFrame
-from pandas.core.groupby.generic import DataFrameGroupBy
+from pandas import DataFrame
 
 from fedex_generator.commons.consts import TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
 from fedex_generator.commons import utils
 from fedex_generator.commons.DatasetRelation import DatasetRelation
 from fedex_generator.Operations import Operation
-from fedex_generator.Measures.NormalizedDiversityMeasure import NormalizedDiversityMeasure
 from fedex_generator.Measures.DiversityMeasure import DiversityMeasure
-from external_explainers import OutlierExplainer
 
 from typing import Generator, List, Tuple
 
@@ -68,7 +65,6 @@ class GroupBy(Operation.Operation):
         return None
 
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT, explainer: str='fedex',
-                target=None, dir: str | int=None, control=None, hold_out=[],
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[],
                 use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE):
@@ -86,37 +82,6 @@ class GroupBy(Operation.Operation):
 
         :return: explain figures
         """
-
-        if explainer == 'outlier':
-            res_col = None
-            measure = OutlierExplainer()
-
-            # Get the result column. Despite this being a loop - the 2nd returned value of iterate_attributes is always the same.
-            # The change is only in the ignored first value. We simply need a loop to use the generator.
-            for attr, dataset_relation in self.iterate_attributes():
-                _, res_col = dataset_relation.get_source(attr), dataset_relation.get_result(attr)
-                res_col = res_col[~res_col.isnull()]
-                break
-
-            # Get the aggregation attribute and method
-            try:
-                agg = list(self.agg_dict.items())[0]
-            except:
-                agg = self.agg_dict.items()
-            agg_attr, agg_method = agg[0], agg[1][0]
-
-            if dir == 'high':
-                dir = 1
-            elif dir == 'low':
-                dir = -1
-
-            if type(self.group_attributes) == list:
-                g_attr = self.group_attributes[0]
-            else:
-                g_attr = self.group_attributes
-
-            return measure.explain(res_col, self.source_df, g_attr, agg_attr, agg_method, target, dir, control,
-                                           hold_out)
         if schema is None:
             schema = {}
 

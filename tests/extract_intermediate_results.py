@@ -269,7 +269,7 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
     list_scores_sorted.sort()
 
     results_columns = ["score", "significance", "influence", "explanation", "bin", "influence_vals"]
-    results = pd.DataFrame([], columns=results_columns)
+    results = pd.DataFrame([["","","","","",""]], columns=results_columns)
 
     for score, max_col_name, bins, _ in list_scores_sorted[:-k - 1:-1]:
         source_name, bins, score, _ = score_dict[max_col_name]
@@ -312,6 +312,7 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
     # There's no choice but to drop the bin column, as it can't be serialized to JSON at the time of
     # writing this.
     results = results.drop(columns=['bin'])
+    results = results.drop(0)
 
     return saved_influence_vals, significance_vals, results
 
