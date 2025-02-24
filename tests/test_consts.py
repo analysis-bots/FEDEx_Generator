@@ -9,10 +9,6 @@ test_fail_explanations = {
     "Results dataframe comparison test": "The results dataframes in the re-produced results do not match the results dataframes in the saved results. If all other tests have passed, then there is likely an error in the build_explanation method of the tested measure",
     "Column names comparison test": "The column names in the re-produced results do not match the column names in the saved results. There is likely an error in the method _get_column_names of the GroupBy operation.",
     "One to many attributes comparison test": "The one to many attributes in the re-produced results do not match the one to many attributes in the saved results. There is likely an error in the method get_one_to_many_attributes of the GroupBy operation.",
-    "Predicate comparison test": "The predicates in the re-produced results do not match the predicates in the saved results. There is likely an error in either the compute_predicates_per_attribute or the calc_influence_pred method of OutlierMeasure.",
-    "Final predicate comparison test": "The final predicate in the re-produced results does not match the final predicate in the saved results. If the predicate comparison test passed, there is likely an error in the method merge_preds of the OutlierMeasure.",
-    "Final influence comparison test": "The final influence in the re-produced results does not match the final influence in the saved results. If the predicate comparison test passed, there is likely an error in the method merge_preds of the OutlierMeasure.",
-    "Final dataframe comparison test": "The final dataframes in the re-produced results do not match the final dataframes in the saved results. If the predicate comparison test passed, there is likely an error in the method merge_preds of the OutlierMeasure."
 }
 
 test_funcs = {
@@ -56,24 +52,4 @@ test_funcs = {
         "attribute_name": "saved_results",
         "require_duplicate_fix": False
     },
-    "Predicate comparison test": {
-        "func": rcf.compare_predicates,
-        "attribute_name": "preds",
-        "require_duplicate_fix": False
-    },
-    "Final predicate comparison test": {
-        "func": rcf.compare_final_predicate,
-        "attribute_name": "final_pred",
-        "require_duplicate_fix": False
-    },
-    "Final influence comparison test": {
-        "func": rcf.compare_final_inf,
-        "attribute_name": "final_inf",
-        "require_duplicate_fix": False
-    },
-    "Final dataframe comparison test": {
-        "func": rcf.compare_final_df,
-        "attribute_name": "final_df",
-        "require_duplicate_fix": False
-    }
 }

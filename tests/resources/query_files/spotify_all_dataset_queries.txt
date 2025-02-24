@@ -1,5 +1,4 @@
 # Queries for the spotify dataset
 (popularity, >=, fedex, {value: 65, top_k: 10})
-(decade, groupby, outlier, {agg_function: mean, top_k: 10, select_columns: popularity, dir: low, target: 2020})
 (key, join, fedex, {})
 (key, groupby, fedex, {agg_function: mean, top_k: 10, select_columns: [popularity ; danceability ; energy ; loudness ; speechiness ; acousticness ; instrumentalness ; liveness ; valence ; tempo]})

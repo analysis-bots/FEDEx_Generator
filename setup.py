@@ -42,6 +42,5 @@ setup(
         'ipython',
         'scipy',
         'paretoset',
-        'external-explainers',
     ]
 )
