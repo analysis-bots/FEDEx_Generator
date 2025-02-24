@@ -78,15 +78,19 @@ def compare_results(result_files: List[dict], re_produced_results: List[dict]):
             matching_result_query = matching_result[k]
 
             for test_name, test_args in consts.test_funcs.items():
+                # Get the attribute name to test, if it exists in the result.
                 test_attribute = test_args['attribute_name']
                 if test_attribute not in v:
                     continue
+                # It may be required to rename duplicate columns or bins, if they exist (otherwise the test may
+                # fail because of a comparison between two different columns with the same name).
                 require_duplicate_fix = test_args['require_duplicate_fix']
                 if require_duplicate_fix:
                     matching_result_query[test_attribute] = tu.fix_duplicate_col_names_and_bin_names(
                         matching_result_query[test_attribute])
                     v[test_attribute] = tu.fix_duplicate_col_names_and_bin_names(v[test_attribute])
 
+                # Run the test and print the results.
                 test_passed, errors = test_args['func'](v[test_attribute], matching_result_query[test_attribute])
                 tu.print_test_messages(errors, test_name, test_passed)
                 if not test_passed:

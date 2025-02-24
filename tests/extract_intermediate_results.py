@@ -31,7 +31,6 @@ from fedex_generator.Operations.GroupBy import GroupBy
 from fedex_generator.Operations.Join import Join
 from fedex_generator.Measures.DiversityMeasure import DiversityMeasure
 from fedex_generator.Measures.ExceptionalityMeasure import ExceptionalityMeasure
-from fedex_generator.Measures.OutlierMeasure import OutlierMeasure
 from fedex_generator.Operations.Operation import Operation
 from fedex_generator.Measures.BaseMeasure import BaseMeasure
 
@@ -269,7 +268,7 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
     list_scores_sorted.sort()
 
     results_columns = ["score", "significance", "influence", "explanation", "bin", "influence_vals"]
-    results = pd.DataFrame([], columns=results_columns)
+    results = pd.DataFrame([["", "", "", "", "", ""]], columns=results_columns)
 
     for score, max_col_name, bins, _ in list_scores_sorted[:-k - 1:-1]:
         source_name, bins, score, _ = score_dict[max_col_name]
@@ -312,6 +311,7 @@ def replicate_calc_influence(measure: BaseMeasure, score_dict: Dict[str, tuple],
     # There's no choice but to drop the bin column, as it can't be serialized to JSON at the time of
     # writing this.
     results = results.drop(columns=['bin'])
+    results = results.drop(0)
 
     return saved_influence_vals, significance_vals, results
 
@@ -379,79 +379,6 @@ def dir_to_int(dir: str | int) -> int:
         return dir
 
 
-def outlier_explain_runner(query: Query, first_dataset: DataFrame, second_dataset: DataFrame = None,
-                           require_json_output: bool = True) -> dict:
-    """
-    Run the steps of a query explanation using the outlier explainer.
-    :param query: The query object.
-    :param first_dataset: The first dataset. Mandatory.
-    :param second_dataset: The second dataset. Only needed if a join operation is performed. Can be None if not needed.
-    Should not be needed since at the time of writing this, the outlier explainer only supports groupby operations.
-    :param require_json_output: Whether to require the output of any dataframes to be in JSON format. Default is True.
-    :return: A dictionary with the results.
-    """
-    operation = create_operation_object(query, first_dataset, second_dataset)
-
-    results_dict = {}
-
-    if query.operation != 'groupby':
-        results_dict['error'] = 'Outlier explanation is currently only supported for groupby operations.'
-        return results_dict
-
-    measure = OutlierMeasure()
-
-    preds = []
-
-    attrs = first_dataset.columns
-    attrs = [a for a in attrs if a not in [query.column, query.arguments['select_columns']]]
-
-    # Do the predicate calculation for each attribute, like in the explain function.
-    for attr in attrs:
-        predicates = measure.compute_predicates_per_attribute(
-            attr=attr,
-            df_in=first_dataset,
-            g_att=query.column,
-            g_agg=query.arguments['select_columns'],
-            agg_method=query.arguments['agg_function'],
-            target=query.arguments['target'],
-            dir=dir_to_int(query.arguments['dir']),
-            df_in_consider=first_dataset,
-            df_agg_consider=operation.result_df
-        )
-
-        preds += predicates
-
-    preds.sort(key=lambda x: -x[2])
-
-    results_dict['preds'] = preds
-
-    # Use the merge_preds function to get the final results.
-    final_pred, final_inf, final_df = measure.merge_preds(
-        df_agg=operation.result_df,
-        df_in=first_dataset,
-        df_in_consider=first_dataset,
-        preds=preds,
-        g_att=query.column,
-        g_agg=query.arguments['select_columns'],
-        agg_method=query.arguments['agg_function'],
-        target=query.arguments['target'],
-        dir=dir_to_int(query.arguments['dir']),
-    )
-
-    if require_json_output and final_df is not None:
-        # If the final_df is a Series, convert it to a DataFrame so we can save it correctly.
-        if isinstance(final_df, Series):
-            final_df = final_df.to_frame()
-        # Save, while making sure that the index also gets saved.
-        final_df = final_df.to_json(orient='columns')
-
-    results_dict['final_pred'] = final_pred
-    results_dict['final_inf'] = final_inf
-    results_dict['final_df'] = final_df if final_df is not None else None
-
-    return results_dict
-
-
 def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_dataset: DataFrame = None,
                        idx: int = None, require_json_output: bool = True) -> dict:
     """
@@ -469,9 +396,6 @@ def run_on_all_queries(queries: List[Query], first_dataset: DataFrame, second_da
         if query.explainer == 'fedex':
             all_results_dict[str(query)] = fedex_explain_runner(query, first_dataset, second_dataset,
                                                                 require_json_output)
-        elif query.explainer == 'outlier':
-            all_results_dict[str(query)] = outlier_explain_runner(query, first_dataset, second_dataset,
-                                                                  require_json_output)
         else:
             all_results_dict[str(query)] = {'error': f"Explainer {query.explainer} not supported."}
 

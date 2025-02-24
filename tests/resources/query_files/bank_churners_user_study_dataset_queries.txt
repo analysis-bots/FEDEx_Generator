@@ -2,5 +2,4 @@
 GlobalSelect=[Customer_Age, Dependent_count, Months_on_book, Months_Inactive_Count_Last_Year, Contacts_Count_Last_Year, Credit_Limit, Credit_Used, Credit_Open_To_Buy, Total_Amount_Change_Q4_vs_Q1, Total_Transitions_Amount, Total_Count_Change_Q4_vs_Q1, Credit_Avg_Utilization_Ratio]
 (Customer_Age, >, fedex, {value: 50, top_k: 10})
 (Customer_Age, groupby, fedex, {agg_function: mean, top_k: 10})
-(Customer_Age, groupby, outlier, {agg_function: mean, top_k: 10, select_columns: Credit_Limit, dir: high, target: 50})
 (Customer_Age, join, fedex, {})

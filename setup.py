@@ -41,6 +41,6 @@ setup(
         'singleton-decorator',
         'ipython',
         'scipy',
-        'paretoset'
+        'paretoset',
     ]
 )

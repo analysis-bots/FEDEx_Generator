@@ -2,4 +2,3 @@
 GlobalSelect=[MSSubClass, LotArea, OverallQual, OverallCond, YearBuilt, 1stFlrSF, 2ndFlrSF, GrLivArea, FullBath, TotRmsAbvGrd, GarageCars, PoolArea, YrSold, SalePrice]
 (SalePrice, >, fedex, {value: 214000, top_k: 10})
 (YrSold, groupby, fedex, {agg_function: mean, top_k: 10})
-(YrSold, groupby, outlier, {agg_function: mean, top_k: 10, select_columns: PoolArea, dir: high, target: 2006})
