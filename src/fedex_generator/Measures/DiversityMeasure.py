@@ -140,7 +140,13 @@ class DiversityMeasure(BaseMeasure):
         """
 
         # Check if the name corresponds to a method of `pd.Series` or is in the `OP_TO_FUNC` dictionary
-        operation = name.split("_")[-1].lower()
+        if isinstance(name, str):
+            operation = name.split("_")[-1].lower()
+        elif isinstance(name, tuple):
+            name = "_".join(x for x in name)
+            operation = name.lower()
+        else:
+            raise TypeError(f"The type of the column name is {type(name)}, which we the developers did not expect and do not know how to handle. If you are a developer, please fix this. If you are a user, please report this. Thank you.")
         if hasattr(pd.Series, operation):
             return getattr(pd.Series, operation)
         elif operation in OP_TO_FUNC:
@@ -243,7 +249,8 @@ class DiversityMeasure(BaseMeasure):
         :return: new explanation
         """
         max_group_value = list(binned_column[binned_column == max_value].to_dict().keys())[0]
-        max_value_name = binned_column.name.replace('_', '\\ ')
+        binned_column_name = str(binned_column.name)
+        max_value_name = binned_column_name.replace('_', '\\ ')
         try:
             max_group_value.replace('$', '\\$')
             max_value_name.replace('$', '\\$')

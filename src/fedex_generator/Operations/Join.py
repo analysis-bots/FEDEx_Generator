@@ -60,12 +60,12 @@ class Join(Operation.Operation):
         :yield: Tuples of attribute name and DatasetRelation objects with the left and right DataFrames and the result DataFrame.
         """
         for attr in self.left_df.columns:
-            if attr.lower() == "index":
+            if isinstance(attr, str) and attr.lower() == "index":
                 continue
             yield attr, DatasetRelation(self.left_df, self.result_df, self.left_name)
 
         for attr in set(self.right_df.columns) - set(self.left_df.columns):
-            if attr.lower() == "index":
+            if isinstance(attr, str) and attr.lower() == "index":
                 continue
             yield attr, DatasetRelation(self.right_df, self.result_df, self.right_name)
 

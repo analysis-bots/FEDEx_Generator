@@ -123,8 +123,22 @@ class BaseMeasure(object):
 
     def _calc_measure(self, attr: str, dataset_relation: DatasetRelation, operation_object: Operation, scheme: dict,
                       use_only_columns: list, ignore=None,
-                      unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) \
+                      unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None,
+                      column_mapping: dict=None) \
             -> Tuple[str, float, str, Bins, Tuple[pd.Series, pd.Series]] | Tuple[str, float, None, None, None]:
+        """
+
+        :param attr: The attribute name.
+        :param dataset_relation: The dataset relation for the current attribute.
+        :param operation_object: The operation object for the current operation.
+        :param scheme: The scheme of the columns.
+        :param use_only_columns: A list of columns to include in the explanation. If empty, all columns will be included.
+        :param ignore: A list of columns to ignore in the explanation. Set to [] by default.
+        :param unsampled_source_df: The source DataFrame before sampling. Optional. Only needed if sampling is used.
+        :param unsampled_res_df: The result DataFrame before sampling. Optional. Only needed if sampling is used.
+        :param column_mapping: A dict mapping the original column names to the current column names. Optional. Needed in case some columns were renamed as part of a groupby operation.
+        :return:
+        """
         # If the attribute is in the ignore list, skip it.
         if attr in ignore:
             return attr, -1, None, None, None
@@ -153,7 +167,12 @@ class BaseMeasure(object):
         unsampled_bin_candidates = None
 
         if unsampled_source_df is not None and unsampled_res_df is not None:
-            source_col = unsampled_source_df[attr]
+            # In the case of groupby that creates tuple columns, we need to handle the case where the attribute in the
+            # result dataframe is a tuple that did not exist in the source dataframe.
+            if attr not in unsampled_source_df.columns and isinstance(attr, tuple):
+                source_col = unsampled_source_df[attr[0]]
+            else:
+                source_col = unsampled_source_df[attr] if attr not in column_mapping else unsampled_source_df[column_mapping[attr]]
             res_col = unsampled_res_df[attr]
             unsampled_bin_candidates = Bins(source_col, res_col, size)
 
@@ -168,7 +187,9 @@ class BaseMeasure(object):
                 (source_col, res_col))
 
     def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore=None,
-                     unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) -> \
+                     unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None,
+                     column_mapping: dict=None
+                     ) -> \
             Dict[str, float]:
         """
         Calculate the measure for each attribute in the operation_object.
@@ -177,11 +198,16 @@ class BaseMeasure(object):
         :param scheme: The scheme of the columns, in the form of a dictionary, where the key is the column name and the value is the scheme of the column. Columns with the scheme 'i' will be ignored.
         :param use_only_columns: A list of columns to include in the explanation. If empty, all columns will be included.
         :param ignore: A list of columns to ignore in the explanation. Set to [] by default.
+        :param unsampled_source_df: The unsampled source DataFrame. Optional. Only needed if sampling is used.
+        :param unsampled_res_df: The unsampled result DataFrame. Optional. Only needed if sampling is used.
+        :param column_mapping: A dict mapping the original column names to the current column names. Optional. Needed in case some columns were renamed as part of a groupby operation.
         """
         # Set the operation object, the scheme, and the score dictionary to the given values.
         # Also initialize the max_val to -1.
         if ignore is None:
             ignore = []
+        if column_mapping is None:
+            column_mapping = {}
 
         self.operation_object = operation_object
         self.score_dict = {}
@@ -193,7 +219,7 @@ class BaseMeasure(object):
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(self._calc_measure, attr, dataset_relation, operation_object, scheme, use_only_columns,
-                                ignore, unsampled_source_df, unsampled_res_df) for attr, dataset_relation in operation_object.iterate_attributes()
+                                ignore, unsampled_source_df, unsampled_res_df, column_mapping) for attr, dataset_relation in operation_object.iterate_attributes()
             ]
             for future in as_completed(futures):
                 attr, measure_score, source_name, bins, cols = future.result()
