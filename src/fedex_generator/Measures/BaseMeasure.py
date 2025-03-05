@@ -461,23 +461,23 @@ class BaseMeasure(object):
 
         # If there are no interesting explanations, print a message and return.
         if len(scores) == 0:
-            print(f'{source_name} dataset there is not interesting explanation')
+            print(f'Could not find any interesting explanations for dataset {source_name}.')
             return
 
         # If K is greater than 1,
         # set the number of rows in the plot to the ceiling of the length of the scores divided by figs_in_row.
         if K > 1:  ###
             rows = math.ceil(len(scores) / figs_in_row)
-            fig, axes = plt.subplots(rows, figs_in_row, figsize=(5 * figs_in_row, 6 * rows))
+            fig, axes = plt.subplots(rows, figs_in_row, figsize=(7 * figs_in_row, 8 * rows))
             for ax in axes.reshape(-1):
                 ax.set_axis_off()
         else:
-            fig, axes = plt.subplots(figsize=(5, 5))
+            fig, axes = plt.subplots(figsize=(7, 8))
 
         # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
         title = title if title else self.build_operation_expression(source_name)
 
-        fig.suptitle(title, fontsize=20)
+        fig.suptitle(title, fontsize=30)
 
         # Draw the bar plots for each explanation
         for index, (explanation, current_bin, current_influence_vals, score) in enumerate(

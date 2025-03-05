@@ -27,7 +27,7 @@ OP_TO_FUNC = {
 
 
 def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=None, xname=None, yname=None, alpha=1.,
-             ax=None):
+             ax=None, footnote: str = None):
     """
     Draw a bar chart with optional features.
 
@@ -77,10 +77,10 @@ def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=No
 
     # Add the x and y axis labels, if provided
     if xname is not None:
-        ax.set_xlabel(utils.to_valid_latex_with_escaped_dollar_char(xname), fontsize=16)
+        ax.set_xlabel(utils.to_valid_latex_with_escaped_dollar_char(xname), fontsize=24)
 
     if yname is not None:
-        ax.set_ylabel(utils.to_valid_latex_with_escaped_dollar_char(yname), fontsize=16)
+        ax.set_ylabel(utils.to_valid_latex_with_escaped_dollar_char(yname), fontsize=24)
 
 
 def flatten_other_indexes(series, main_index):
@@ -122,6 +122,8 @@ class DiversityMeasure(BaseMeasure):
     - :math:`\\tilde{a}` is the mean of the values of attribute A.\n
     - :math:`a_i` is the i-th value of attribute A in the output dataframe.\n
      """
+
+    MAX_BARS = 25
 
     def __init__(self):
         super().__init__()
@@ -205,9 +207,8 @@ class DiversityMeasure(BaseMeasure):
             labels = set(aggregated_result.keys())
 
             # Limit the number of bars to 25, and sort the labels
-            MAX_BARS = 25
-            if len(labels) > MAX_BARS:
-                top_items, _ = self.get_max_k(influence_vals, MAX_BARS)
+            if len(labels) > self.MAX_BARS:
+                top_items, _ = self.get_max_k(influence_vals, self.MAX_BARS)
                 labels = sorted(top_items)
             else:
                 labels = sorted(labels)
@@ -217,7 +218,7 @@ class DiversityMeasure(BaseMeasure):
             if show_scores:
                 ax.set_title(f'score: {score}\n{utils.to_valid_latex(title)}', fontdict={'fontsize': 10})
             else:
-                ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 14})
+                ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
             draw_bar(labels, aggregate_column, aggregated_result.mean(), [max_value],
                      xname=f'{bin_item.get_bin_name()} values', yname=bin_item.get_value_name(), ax=ax)
@@ -226,9 +227,28 @@ class DiversityMeasure(BaseMeasure):
         except Exception as e:
             # In the case of an exception, draw a bar chart using the draw_bar method defined outside the class
             columns = bin_item.get_binned_result_column()
-            title = self._fix_explanation(title, columns, max_value)
-            ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 14})
             max_group_value = list(columns[columns == max_value].to_dict().keys())[0]
+
+            # If there are more than 25 bars, limit the number of bars to 25
+            if len(columns) > self.MAX_BARS:
+                top_items, _ = self.get_max_k(influence_vals, self.MAX_BARS)
+                indexes = []
+                # Get the indexes of the top items, in order of the top items
+                for item in top_items:
+                    indexes.extend(columns[columns == item].index)
+                # Using the indexes in this way will automatically sort the columns such that their order matches that
+                # of the top items
+                columns = columns.loc[indexes]
+                columns = columns[:self.MAX_BARS]
+
+            # The only way I can see this happening is there are so many columns with the max value that the max
+            # value is not in the columns, though it still shouldn't happen because we choose the 1st in the beginning.
+            # Regardless, just to be safe, we'll add the max value to the columns if it's not there.
+            if max_group_value not in columns:
+                columns = columns.append(pd.Series(max_value, index=[max_group_value]))
+
+            title = self._fix_explanation(title, columns, max_value)
+            ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
             draw_bar(list(columns.index),
                      list(columns),

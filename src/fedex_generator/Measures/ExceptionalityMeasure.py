@@ -94,9 +94,9 @@ class ExceptionalityMeasure(BaseMeasure):
         # Set the title of the bar chart. If show_scores is True, display the score in the title
         if title is not None:
             if show_scores:
-                ax.set_title(f'score: {score}\n {utils.to_valid_latex(title)}', fontdict={'fontsize': 14})
+                ax.set_title(f'score: {score}\n {utils.to_valid_latex(title)}', fontdict={'fontsize': 20})
             else:
-                ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 14})
+                ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
         ax.set_axis_on()
         return bin_item.get_bin_name()  ####
