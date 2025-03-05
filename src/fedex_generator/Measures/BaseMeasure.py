@@ -167,12 +167,15 @@ class BaseMeasure(object):
         unsampled_bin_candidates = None
 
         if unsampled_source_df is not None and unsampled_res_df is not None:
-            # In the case of groupby that creates tuple columns, we need to handle the case where the attribute in the
-            # result dataframe is a tuple that did not exist in the source dataframe.
-            if attr not in unsampled_source_df.columns and isinstance(attr, tuple):
-                source_col = unsampled_source_df[attr[0]]
-            else:
-                source_col = unsampled_source_df[attr] if attr not in column_mapping else unsampled_source_df[column_mapping[attr]]
+            # source_col can be none in some groupby cases. We don't want to modify it if it is, as that may cause
+            # unexpected behavior.
+            if source_col is not None:
+                # In the case of groupby that creates tuple columns, we need to handle the case where the attribute in the
+                # result dataframe is a tuple that did not exist in the source dataframe.
+                if attr not in unsampled_source_df.columns and isinstance(attr, tuple):
+                    source_col = unsampled_source_df[attr[0]]
+                else:
+                    source_col = unsampled_source_df[attr] if attr not in column_mapping else unsampled_source_df[column_mapping[attr]]
             res_col = unsampled_res_df[attr]
             unsampled_bin_candidates = Bins(source_col, res_col, size)
 

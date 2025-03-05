@@ -227,15 +227,50 @@ class DiversityMeasure(BaseMeasure):
         except Exception as e:
             # In the case of an exception, draw a bar chart using the draw_bar method defined outside the class
             columns = bin_item.get_binned_result_column()
-            max_group_value = list(columns[columns == max_value].to_dict().keys())[0]
+            # Using a simple columns == max_value works, so long as the index is not a multi-index one.
+            # Otherwise, the max_value may end up being from one of the index levels, which will cause an exception as
+            # it is not in the columns.
+            if isinstance(columns.index, pd.MultiIndex) and not isinstance(max_value, tuple):
+                # Search the index for any match with the max value, even if it's from a subset of the index
+                # For example, if we have a MultiIndex with levels A,B,C, and the max value is from B, we can still
+                # find it in the index.
+                index = columns.index.to_frame()
+                # Get all locations in the index where the max_value is found
+                indexes = set()
+                for col in index.columns:
+                    col_indexes = index[index[col] == max_value].index
+                    if len(col_indexes) > 0:
+                        indexes.update(col_indexes)
+                # Get the columns corresponding to the max value
+                indexes = list(indexes)
+                max_group_value = list(columns.loc[indexes].to_dict().keys())
+                # We set this to also be equal, since this value will get accessed again in _fix_explanation, and it
+                # should match the way we fixed it here.
+                max_value = max_group_value
+            else:
+                max_group_value = list(columns[columns == max_value].to_dict().keys())[0]
 
             # If there are more than 25 bars, limit the number of bars to 25
             if len(columns) > self.MAX_BARS:
                 top_items, _ = self.get_max_k(influence_vals, self.MAX_BARS)
-                indexes = []
-                # Get the indexes of the top items, in order of the top items
-                for item in top_items:
-                    indexes.extend(columns[columns == item].index)
+                # Just like before, we need different handling for multi-index cases, in the case where there are
+                # multiple top items, but they are not tuples, i.e. they are not keys for the multi-index
+                if isinstance(columns.index, pd.MultiIndex) and not all([isinstance(i, tuple) for i in top_items]):
+                    index = columns.index.to_frame()
+                    # We use a list this time, because we need to maintain the same order as the top items
+                    indexes = []
+                    for item in top_items:
+                        for col in index.columns:
+                            col_indexes = index[index[col] == item].index
+                            if len(col_indexes) > 0:
+                                indexes.extend(col_indexes)
+                    if len(indexes) > len(columns):
+                        indexes = indexes[:len(columns)]
+                else:
+                    indexes = []
+                    # Get the indexes of the top items, in order of the top items
+                    for item in top_items:
+                        indexes.extend(columns[columns == item].index)
                 # Using the indexes in this way will automatically sort the columns such that their order matches that
                 # of the top items
                 columns = columns.loc[indexes]
@@ -244,22 +279,27 @@ class DiversityMeasure(BaseMeasure):
             # The only way I can see this happening is there are so many columns with the max value that the max
             # value is not in the columns, though it still shouldn't happen because we choose the 1st in the beginning.
             # Regardless, just to be safe, we'll add the max value to the columns if it's not there.
-            if max_group_value not in columns:
-                columns = columns.append(pd.Series(max_value, index=[max_group_value]))
+            if not isinstance(max_group_value, list):
+                if max_group_value not in columns:
+                    columns = columns.append(pd.Series(max_value, index=[max_group_value]))
+            else:
+                for value in max_group_value:
+                    if value not in columns:
+                        columns = columns.append(pd.Series(max_value, index=[value]))
 
-            title = self._fix_explanation(title, columns, max_value)
+            title = self._fix_explanation(title, columns, max_value, max_group_value)
             ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
             draw_bar(list(columns.index),
                      list(columns),
                      average,
-                     [max_group_value],
+                     [max_group_value] if not isinstance(max_group_value, list) else max_group_value,
                      yname=bin_item.get_bin_name(), ax=ax)
 
             ax.set_axis_on()
 
     @staticmethod
-    def _fix_explanation(explanation: str, binned_column: Series, max_value) -> str:
+    def _fix_explanation(explanation: str, binned_column: Series, max_value, max_group_value) -> str:
         """
         Change explanation column to match group by
         :param explanation:  bin explanation
@@ -268,7 +308,11 @@ class DiversityMeasure(BaseMeasure):
 
         :return: new explanation
         """
-        max_group_value = list(binned_column[binned_column == max_value].to_dict().keys())[0]
+        # Tuple is used to represent multi-index columns
+        # if isinstance(max_value, tuple):
+        #     max_group_value = list(binned_column.loc[max_value].to_dict().keys())[0]
+        # else:
+        #     max_group_value = list(binned_column[binned_column == max_value].to_dict().keys())[0]
         binned_column_name = str(binned_column.name)
         max_value_name = binned_column_name.replace('_', '\\ ')
         try:

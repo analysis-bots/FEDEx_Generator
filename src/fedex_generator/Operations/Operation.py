@@ -77,9 +77,12 @@ class Operation:
         # a very small gain in performance.
         if sample_size < SAMPLE_SIZE:
             sample_size = SAMPLE_SIZE
+        # If the sample size is larger than the dataframe, we return the dataframe as is
         if df.shape[0] <= sample_size:
             return df
         else:
+            # Convert the sample size to an integer, in case it was passed as a float above 1.
+            sample_size = int(sample_size)
             # We use a set seed so that the user will always get the same explanation when using sampling.
             generator = np.random.default_rng(RANDOM_SEED)
             uniform_indexes = generator.choice(df.index, sample_size, replace=False)

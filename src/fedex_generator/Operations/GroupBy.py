@@ -94,7 +94,7 @@ class GroupBy(Operation.Operation):
         backup_source_df, backup_res_df = None, None
         if use_sampling:
             backup_source_df, backup_res_df = self.source_df, self.result_df
-            self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
+            self.source_df, self.result_df = self.sample(self.source_df, sample_size), self.sample(self.result_df, sample_size)
 
         # Unless the outlier explainer is used, the diversity measure is always used for the groupby operation.
         measure = DiversityMeasure()
