@@ -393,7 +393,7 @@ class BaseMeasure(object):
 
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                       deleted=None) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure]:
+                       deleted=None) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure] | List[str] | None:
         """
         Calculate the influence of each attribute in the dataset.
 
@@ -408,7 +408,7 @@ class BaseMeasure(object):
         :param deleted: A dictionary of deleted attributes as keys, with the values as a tuple: (dataframe name, bin object, score, column values). Optional.
 
         :return: A list (or a single) matplotlib figures containing the explanations for the top k attributes, after
-        computing the influence.
+        computing the influence. Alternatively, returns the names of the explained attributes, or None if no explanations were found.
         """
 
         # If deleted is not None, set the score dictionary to the deleted dictionary.
@@ -464,7 +464,7 @@ class BaseMeasure(object):
 
         # If there are no interesting explanations, print a message and return.
         if len(scores) == 0:
-            print(f'Could not find any interesting explanations for dataset {source_name}.')
+            print(f'Could not find any interesting explanations for your query over dataset {source_name}.')
             return
 
         # If K is greater than 1,
