@@ -149,7 +149,7 @@ class Filter(Operation.Operation):
     def explain(self, schema=None, attributes=None, top_k=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
-                use_sampling: bool = True, sample_size = Operation.SAMPLE_SIZE) -> None:
+                use_sampling: bool = True, sample_size = Operation.SAMPLE_SIZE, debug_mode: bool =False) -> None:
         """
         Explain for filter operation
 
@@ -167,6 +167,7 @@ class Filter(Operation.Operation):
         :param ignore: Unused but kept for compatibility.
         :param use_sampling: Whether to use sampling to speed up the generation of explanations.
         :param sample_size: The sample size to use when using sampling. Can be a number or a percentage of the dataframe size. Default is 5000.
+        :param debug_mode: Developer option for debugging. Disables multiprocessing when enabled. Can also be used to print additional information. Default is False.
 
         :return: explain figures
         """
@@ -184,12 +185,13 @@ class Filter(Operation.Operation):
 
         # The measure used for filer operations is always the ExceptionalityMeasure.
         measure = ExceptionalityMeasure()
-        scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=source_df_backup, unsampled_res_df=result_df_backup)
+        scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=source_df_backup,
+                                      unsampled_res_df=result_df_backup, debug_mode=debug_mode)
 
         self.delete_correlated_atts(measure, TH=corr_TH)
         # Get the explanation figures.
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
-                                         show_scores=show_scores, title=title)
+                                         show_scores=show_scores, title=title, debug_mode=debug_mode)
         if figures:
             self.correlated_notes(figures, top_k)
 

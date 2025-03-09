@@ -72,7 +72,9 @@ class Join(Operation.Operation):
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
-                use_sampling: bool = True, sample_size: int | float = Operation.SAMPLE_SIZE):
+                use_sampling: bool = True, sample_size: int | float = Operation.SAMPLE_SIZE,
+                debug_mode: bool = False
+                ):
         """
         Explain for filter operation
 
@@ -84,6 +86,7 @@ class Join(Operation.Operation):
         :param title: explanation title
         :param use_sampling: whether to use sampling or not
         :param sample_size: the size of the sample to use. Can be a percentage of the dataframe size if below 1. Default is 5000.
+        :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False. Can possibly add more debug options in the future.
 
         :return: explain figures
         """
@@ -120,10 +123,11 @@ class Join(Operation.Operation):
 
         # When using the FEDEx explainer, the exceptionality measure is used to calculate the explanation.
         measure = ExceptionalityMeasure()
-        scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=combined_source_df, unsampled_res_df=backup_res_df)
+        scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=combined_source_df,
+                                      unsampled_res_df=backup_res_df, debug_mode=debug_mode)
 
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
-                                         show_scores=show_scores, title=title)
+                                         show_scores=show_scores, title=title, debug_mode=debug_mode)
 
         if use_sampling:
             self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df

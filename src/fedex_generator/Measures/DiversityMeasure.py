@@ -149,18 +149,35 @@ class DiversityMeasure(BaseMeasure):
             operation = name.lower()
         else:
             raise TypeError(f"The type of the column name is {type(name)}, which we the developers did not expect and do not know how to handle. If you are a developer, please fix this. If you are a user, please report this. Thank you.")
-        if hasattr(pd.Series, operation):
+        # If the operation is a method of `pd.Series`, we can quickly return the function. Unless the operation name coincides with a column name,
+        # in which case we can't be sure if it's a method or a column name, so we need to check the agg_dict.
+        # As an example: the spotify dataset has a column named "mode", which is in-fact the reason why this condition
+        # was discovered as necessary, because reaching here with "mode" as the operation name would cause an aggregation failure
+        # exception in the calling function once it tries to use the function returned here.
+        if hasattr(pd.Series, operation) and not operation in self.operation_object.result_df.columns:
             return getattr(pd.Series, operation)
         elif operation in OP_TO_FUNC:
             return OP_TO_FUNC[operation]
 
-        # Search within the `agg_dict` of the `operation_object`
         res = []
+        # Search within the `agg_dict` of the `operation_object`.
         for x in self.operation_object.agg_dict:
             for y in self.operation_object.agg_dict[x]:
                 res.append(x + '_' + (y if isinstance(y, str) else y.__name__))
-        aggregation_index = res.index(name)
-        return list(self.operation_object.agg_dict.values())[0][aggregation_index]
+        # Note that this can fail if the agg_dict it not set properly, or if the name is not in the agg_dict.
+        # For example, if the column is "All", meaning all columns are aggregated, then the name will not be in the
+        # agg_dict, and this will fail.
+        try:
+            aggregation_index = res.index(name)
+            return list(self.operation_object.agg_dict.values())[0][aggregation_index]
+        except ValueError as e:
+            if any([x.startswith("All_") for x in res]):
+                return list(self.operation_object.agg_dict.values())[0][0]
+            else:
+                raise e
+        # aggregation_index = res.index(name)
+        # return list(self.operation_object.agg_dict.values())[0][aggregation_index]
+
 
     def draw_bar(self, bin_item: MultiIndexBin, influence_vals: dict = None, title=None, ax=None, score=None,
                  show_scores: bool = False):
@@ -423,7 +440,13 @@ class DiversityMeasure(BaseMeasure):
             # on those values and set the max value to the result of the aggregation function
             bin_values = current_bin.get_result_by_values([max_value])
             operation = self.get_agg_func_from_name(res_col.name)
-            max_value_numeric = operation(bin_values)
+            # If the operation is a callable function, call it with the bin values
+            if callable(operation):
+                max_value_numeric = operation(bin_values)
+            # Otherwise, it is a string, so we need to get the function from the OP_TO_FUNC dictionary
+            else:
+                operation = OP_TO_FUNC[operation]
+                max_value_numeric = operation(bin_values)
 
             # Get the name of the column with the maximum value, and compute the variance of the result column
             max_col_name = current_bin.get_bin_name()

@@ -191,7 +191,7 @@ class BaseMeasure(object):
 
     def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore=None,
                      unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None,
-                     column_mapping: dict=None
+                     column_mapping: dict=None, debug_mode: bool = False
                      ) -> \
             Dict[str, float]:
         """
@@ -204,6 +204,7 @@ class BaseMeasure(object):
         :param unsampled_source_df: The unsampled source DataFrame. Optional. Only needed if sampling is used.
         :param unsampled_res_df: The unsampled result DataFrame. Optional. Only needed if sampling is used.
         :param column_mapping: A dict mapping the original column names to the current column names. Optional. Needed in case some columns were renamed as part of a groupby operation.
+        :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False.
         """
         # Set the operation object, the scheme, and the score dictionary to the given values.
         # Also initialize the max_val to -1.
@@ -219,13 +220,19 @@ class BaseMeasure(object):
 
         # Iterate over the attributes in the operation object.
         # From limited testing, doing this in parallel gives a small performance boost.
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(self._calc_measure, attr, dataset_relation, operation_object, scheme, use_only_columns,
-                                ignore, unsampled_source_df, unsampled_res_df, column_mapping) for attr, dataset_relation in operation_object.iterate_attributes()
-            ]
-            for future in as_completed(futures):
-                attr, measure_score, source_name, bins, cols = future.result()
+        if not debug_mode:
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(self._calc_measure, attr, dataset_relation, operation_object, scheme, use_only_columns,
+                                    ignore, unsampled_source_df, unsampled_res_df, column_mapping) for attr, dataset_relation in operation_object.iterate_attributes()
+                ]
+                for future in as_completed(futures):
+                    attr, measure_score, source_name, bins, cols = future.result()
+                    if measure_score != -1:
+                        self.score_dict[attr] = (source_name, bins, measure_score, cols)
+        else:
+            for attr, dataset_relation in operation_object.iterate_attributes():
+                attr, measure_score, source_name, bins, cols = self._calc_measure(attr, dataset_relation, operation_object, scheme, use_only_columns, ignore, unsampled_source_df, unsampled_res_df, column_mapping)
                 if measure_score != -1:
                     self.score_dict[attr] = (source_name, bins, measure_score, cols)
 
@@ -393,7 +400,8 @@ class BaseMeasure(object):
 
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                       deleted=None) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure] | List[str] | None:
+                       deleted=None, debug_mode: bool = False
+                       ) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure] | List[str] | None:
         """
         Calculate the influence of each attribute in the dataset.
 
@@ -406,6 +414,7 @@ class BaseMeasure(object):
         :param show_scores: Whether to show the scores on the plot. Default is False.
         :param title: The title of the plot. Optional.
         :param deleted: A dictionary of deleted attributes as keys, with the values as a tuple: (dataframe name, bin object, score, column values). Optional.
+        :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False.
 
         :return: A list (or a single) matplotlib figures containing the explanations for the top k attributes, after
         computing the influence. Alternatively, returns the names of the explained attributes, or None if no explanations were found.
@@ -440,13 +449,17 @@ class BaseMeasure(object):
 
         # Iterate over the top K attributes, and get the influence values for each bin.
         # From limited testing, doing this in parallel gives a small performance boost.
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(self._calc_influence, score_dict, max_col_name, results_columns)
-                for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]
-            ]
-            for future in as_completed(futures):
-                results = pd.concat([results, future.result()], ignore_index=True)
+        if not debug_mode:
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(self._calc_influence, score_dict, max_col_name, results_columns)
+                    for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]
+                ]
+                for future in as_completed(futures):
+                    results = pd.concat([results, future.result()], ignore_index=True)
+        else:
+            for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]:
+                results = pd.concat([results, self._calc_influence(score_dict, max_col_name, results_columns)], ignore_index=True)
 
         results = results.drop(axis='index', index=0)
 
