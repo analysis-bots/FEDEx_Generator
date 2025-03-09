@@ -3,6 +3,7 @@ import pandas as pd
 from numpy import number
 from pandas import Series
 from scipy import stats
+from typing import Callable
 
 from fedex_generator.Measures.BaseMeasure import BaseMeasure, START_BOLD, END_BOLD
 from fedex_generator.Measures.Bins import Bin, MultiIndexBin
@@ -22,7 +23,8 @@ OP_TO_FUNC = {
     'median': np.median,
     'first': lambda bin_values: bin_values[0],
     'last': lambda bin_values: bin_values[-1],
-    'size': np.sum
+    'size': np.sum,
+    'nunique': lambda bin_values: len(set(bin_values))
 }
 
 
@@ -128,7 +130,7 @@ class DiversityMeasure(BaseMeasure):
     def __init__(self):
         super().__init__()
 
-    def get_agg_func_from_name(self, name: str) -> str:
+    def get_agg_func_from_name(self, name: str) -> str | Callable:
         """
         Retrieve the aggregation function corresponding to the given name.
 
@@ -141,7 +143,11 @@ class DiversityMeasure(BaseMeasure):
         :return: The aggregation function corresponding to the given name.
         """
 
-        # Check if the name corresponds to a method of `pd.Series` or is in the `OP_TO_FUNC` dictionary
+        # Get the operation name from the column name.
+        # Name can be an int or a float in some cases, so we need to convert it to a string.
+        if isinstance(name, int) or isinstance(name, float):
+            name = str(name)
+        # It can also be a string, or in the case of a multi-index, a tuple.
         if isinstance(name, str):
             operation = name.split("_")[-1].lower()
         elif isinstance(name, tuple):
@@ -149,13 +155,20 @@ class DiversityMeasure(BaseMeasure):
             operation = name.lower()
         else:
             raise TypeError(f"The type of the column name is {type(name)}, which we the developers did not expect and do not know how to handle. If you are a developer, please fix this. If you are a user, please report this. Thank you.")
+
+        # Check if the name corresponds to a method of `pd.Series` or is in the `OP_TO_FUNC` dictionary
         # If the operation is a method of `pd.Series`, we can quickly return the function. Unless the operation name coincides with a column name,
         # in which case we can't be sure if it's a method or a column name, so we need to check the agg_dict.
         # As an example: the spotify dataset has a column named "mode", which is in-fact the reason why this condition
         # was discovered as necessary, because reaching here with "mode" as the operation name would cause an aggregation failure
         # exception in the calling function once it tries to use the function returned here.
         if hasattr(pd.Series, operation) and not operation in self.operation_object.result_df.columns:
-            return getattr(pd.Series, operation)
+            # In cases like 'size', this can end up returning a property, which will cause an exception when it's used
+            # in the calling function. So we need to check if it's callable. Otherwise we'll find it later in the
+            # agg_dict.
+            attr = getattr(pd.Series, operation)
+            if callable(attr):
+                return attr
         elif operation in OP_TO_FUNC:
             return OP_TO_FUNC[operation]
 
