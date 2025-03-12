@@ -491,7 +491,11 @@ class BaseMeasure(object):
             for ax in axes.reshape(-1):
                 ax.set_axis_off()
         else:
-            total_text_len = len(title) + len(explanations.iloc[0])
+            total_text_len = 0
+            if title:
+                total_text_len += len(title)
+            if explanations is not None and len(explanations) > 0:
+                total_text_len += len(explanations.iloc[0])
             # If the text is so long that it probably won't fit properly in the figure, increase the figure size.
             # Note that 300 is a fairly arbitrary threshold, made on an educated guess that the usual is around
             # 150-250 characters long, and that 300+ is probably around where it starts to get too long.
