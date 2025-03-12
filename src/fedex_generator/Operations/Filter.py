@@ -209,6 +209,9 @@ class Filter(Operation.Operation):
 
         :param figs_in_row: The number of figures to display in one row. Default is the value of DEFAULT_FIGS_IN_ROW.
         """
+        if len(self.not_presented) == 0:
+            print("No attributes were deleted due to high correlation.")
+            return
         measure = ExceptionalityMeasure()
         measure.calc_influence(deleted=self.not_presented, figs_in_row=figs_in_row)
 
