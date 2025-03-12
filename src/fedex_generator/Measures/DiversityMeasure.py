@@ -306,13 +306,14 @@ class DiversityMeasure(BaseMeasure):
                 columns = columns.loc[indexes]
                 columns = columns[:self.MAX_BARS]
 
-            # The only way I can see this happening is there are so many columns with the max value that the max
-            # value is not in the columns, though it still shouldn't happen because we choose the 1st in the beginning.
-            # Regardless, just to be safe, we'll add the max value to the columns if it's not there.
+            # If the max value is not in the columns, add it to the columns
             if not isinstance(max_group_value, list):
                 if max_group_value not in columns:
                     columns = columns.append(pd.Series(max_value, index=[max_group_value]))
             else:
+                # Not having the index sorted can raise a performance warning, so we sort it if it's not sorted
+                if not columns.index._is_lexsorted():
+                    columns = columns.sort_index()
                 for value in max_group_value:
                     if value not in columns:
                         columns = columns.append(pd.Series(max_value, index=[value]))

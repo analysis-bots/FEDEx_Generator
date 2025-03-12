@@ -480,6 +480,9 @@ class BaseMeasure(object):
             print(f'Could not find any interesting explanations for your query over dataset {source_name}.')
             return
 
+        # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
+        title = title if title else self.build_operation_expression(source_name)
+
         # If K is greater than 1,
         # set the number of rows in the plot to the ceiling of the length of the scores divided by figs_in_row.
         if K > 1:  ###
@@ -488,10 +491,15 @@ class BaseMeasure(object):
             for ax in axes.reshape(-1):
                 ax.set_axis_off()
         else:
-            fig, axes = plt.subplots(figsize=(5, 6))
-
-        # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
-        title = title if title else self.build_operation_expression(source_name)
+            total_text_len = len(title) + len(explanations.iloc[0])
+            # If the text is so long that it probably won't fit properly in the figure, increase the figure size.
+            # Note that 300 is a fairly arbitrary threshold, made on an educated guess that the usual is around
+            # 150-250 characters long, and that 300+ is probably around where it starts to get too long.
+            if total_text_len > 300:
+                fig, axes = plt.subplots(figsize=(9, 11))
+            # Otherwise, use a smaller figure size.
+            else:
+                fig, axes = plt.subplots(figsize=(5, 6))
 
         fig.suptitle(title, fontsize=20)
 
