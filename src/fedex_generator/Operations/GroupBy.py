@@ -17,7 +17,7 @@ class GroupBy(Operation.Operation):
     """
 
     def __init__(self, source_df, source_scheme, group_attributes, agg_dict, result_df=None, source_name=None,
-                 operation=None):
+                 operation=None, column_mapping=None):
         """
         :param source_df: The source DataFrame, before the groupby operation.
         :param source_scheme: The scheme of the source DataFrame.
@@ -26,6 +26,7 @@ class GroupBy(Operation.Operation):
         :param result_df: The resulting DataFrame after the groupby operation.
         :param source_name: The name of the source DataFrame.
         :param operation: The operation to perform.
+        :param column_mapping: A possible mapping between the source and result columns, if changes were made.
         """
         super().__init__(source_scheme)
         # Set the attributes
@@ -46,6 +47,8 @@ class GroupBy(Operation.Operation):
             self.result_df = result_df
             self.result_name = utils.get_calling_params_name(result_df)
 
+        self._column_mapping = column_mapping
+
 
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
         """
@@ -57,7 +60,7 @@ class GroupBy(Operation.Operation):
         :yield: A tuple containing the attribute name and a DatasetRelation object.
         """
         for attr in self.result_df.columns:
-            if attr.lower() == "index":
+            if isinstance(attr, str) and attr.lower() == "index":
                 continue
             yield attr, DatasetRelation(None, self.result_df, self.source_name)
 
@@ -67,7 +70,9 @@ class GroupBy(Operation.Operation):
     def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT, explainer: str='fedex',
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[],
-                use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE):
+                use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE,
+                debug_mode: bool = False
+                ):
         """
         Explain for group by operation
         :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
@@ -79,6 +84,7 @@ class GroupBy(Operation.Operation):
         :param dir: direction of the outlier. Can be 'high' or 'low', or the corresponding integer values 1 and -1 (HIGH and LOW constants).
         :param use_sampling: whether to use sampling for the explanation.
         :param sample_size: the sample size to use when sampling the data. Can be an integer or a float between 0 and 1. Default is 5000.
+        :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False. Can possibly add more debug options in the future.
 
         :return: explain figures
         """
@@ -92,14 +98,14 @@ class GroupBy(Operation.Operation):
         backup_source_df, backup_res_df = None, None
         if use_sampling:
             backup_source_df, backup_res_df = self.source_df, self.result_df
-            self.source_df, self.result_df = self.sample(self.source_df), self.sample(self.result_df)
+            self.source_df, self.result_df = self.sample(self.source_df, sample_size), self.sample(self.result_df, sample_size)
 
         # Unless the outlier explainer is used, the diversity measure is always used for the groupby operation.
         measure = DiversityMeasure()
         scores = measure.calc_measure(self, schema, attributes, ignore=ignore, unsampled_source_df=backup_source_df,
-                                      unsampled_res_df=backup_res_df)
+                                      unsampled_res_df=backup_res_df, column_mapping=self._column_mapping, debug_mode=debug_mode)
         figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
-                                         show_scores=show_scores, title=title)
+                                         show_scores=show_scores, title=title, debug_mode=debug_mode)
 
         if use_sampling:
             self.source_df, self.result_df = backup_source_df, backup_res_df

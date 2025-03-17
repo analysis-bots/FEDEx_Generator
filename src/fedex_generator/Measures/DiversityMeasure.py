@@ -3,6 +3,7 @@ import pandas as pd
 from numpy import number
 from pandas import Series
 from scipy import stats
+from typing import Callable
 
 from fedex_generator.Measures.BaseMeasure import BaseMeasure, START_BOLD, END_BOLD
 from fedex_generator.Measures.Bins import Bin, MultiIndexBin
@@ -22,12 +23,13 @@ OP_TO_FUNC = {
     'median': np.median,
     'first': lambda bin_values: bin_values[0],
     'last': lambda bin_values: bin_values[-1],
-    'size': np.sum
+    'size': np.sum,
+    'nunique': lambda bin_values: len(set(bin_values))
 }
 
 
 def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=None, xname=None, yname=None, alpha=1.,
-             ax=None):
+             ax=None, footnote: str = None):
     """
     Draw a bar chart with optional features.
 
@@ -77,10 +79,10 @@ def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=No
 
     # Add the x and y axis labels, if provided
     if xname is not None:
-        ax.set_xlabel(utils.to_valid_latex_with_escaped_dollar_char(xname), fontsize=16)
+        ax.set_xlabel(utils.to_valid_latex_with_escaped_dollar_char(xname), fontsize=24)
 
     if yname is not None:
-        ax.set_ylabel(utils.to_valid_latex_with_escaped_dollar_char(yname), fontsize=16)
+        ax.set_ylabel(utils.to_valid_latex_with_escaped_dollar_char(yname), fontsize=24)
 
 
 def flatten_other_indexes(series, main_index):
@@ -123,10 +125,12 @@ class DiversityMeasure(BaseMeasure):
     - :math:`a_i` is the i-th value of attribute A in the output dataframe.\n
      """
 
+    MAX_BARS = 25
+
     def __init__(self):
         super().__init__()
 
-    def get_agg_func_from_name(self, name: str) -> str:
+    def get_agg_func_from_name(self, name: str) -> str | Callable:
         """
         Retrieve the aggregation function corresponding to the given name.
 
@@ -139,20 +143,54 @@ class DiversityMeasure(BaseMeasure):
         :return: The aggregation function corresponding to the given name.
         """
 
+        # Get the operation name from the column name.
+        # Name can be an int or a float in some cases, so we need to convert it to a string.
+        if isinstance(name, int) or isinstance(name, float):
+            name = str(name)
+        # It can also be a string, or in the case of a multi-index, a tuple.
+        if isinstance(name, str):
+            operation = name.split("_")[-1].lower()
+        elif isinstance(name, tuple):
+            name = "_".join(x for x in name)
+            operation = name.lower()
+        else:
+            raise TypeError(f"The type of the column name is {type(name)}, which we the developers did not expect and do not know how to handle. If you are a developer, please fix this. If you are a user, please report this. Thank you.")
+
         # Check if the name corresponds to a method of `pd.Series` or is in the `OP_TO_FUNC` dictionary
-        operation = name.split("_")[-1].lower()
-        if hasattr(pd.Series, operation):
-            return getattr(pd.Series, operation)
+        # If the operation is a method of `pd.Series`, we can quickly return the function. Unless the operation name coincides with a column name,
+        # in which case we can't be sure if it's a method or a column name, so we need to check the agg_dict.
+        # As an example: the spotify dataset has a column named "mode", which is in-fact the reason why this condition
+        # was discovered as necessary, because reaching here with "mode" as the operation name would cause an aggregation failure
+        # exception in the calling function once it tries to use the function returned here.
+        if hasattr(pd.Series, operation) and not operation in self.operation_object.result_df.columns:
+            # In cases like 'size', this can end up returning a property, which will cause an exception when it's used
+            # in the calling function. So we need to check if it's callable. Otherwise we'll find it later in the
+            # agg_dict.
+            attr = getattr(pd.Series, operation)
+            if callable(attr):
+                return attr
         elif operation in OP_TO_FUNC:
             return OP_TO_FUNC[operation]
 
-        # Search within the `agg_dict` of the `operation_object`
         res = []
+        # Search within the `agg_dict` of the `operation_object`.
         for x in self.operation_object.agg_dict:
             for y in self.operation_object.agg_dict[x]:
                 res.append(x + '_' + (y if isinstance(y, str) else y.__name__))
-        aggregation_index = res.index(name)
-        return list(self.operation_object.agg_dict.values())[0][aggregation_index]
+        # Note that this can fail if the agg_dict it not set properly, or if the name is not in the agg_dict.
+        # For example, if the column is "All", meaning all columns are aggregated, then the name will not be in the
+        # agg_dict, and this will fail.
+        try:
+            aggregation_index = res.index(name)
+            return list(self.operation_object.agg_dict.values())[0][aggregation_index]
+        except ValueError as e:
+            if any([x.startswith("All_") for x in res]):
+                return list(self.operation_object.agg_dict.values())[0][0]
+            else:
+                raise e
+        # aggregation_index = res.index(name)
+        # return list(self.operation_object.agg_dict.values())[0][aggregation_index]
+
 
     def draw_bar(self, bin_item: MultiIndexBin, influence_vals: dict = None, title=None, ax=None, score=None,
                  show_scores: bool = False):
@@ -199,9 +237,8 @@ class DiversityMeasure(BaseMeasure):
             labels = set(aggregated_result.keys())
 
             # Limit the number of bars to 25, and sort the labels
-            MAX_BARS = 25
-            if len(labels) > MAX_BARS:
-                top_items, _ = self.get_max_k(influence_vals, MAX_BARS)
+            if len(labels) > self.MAX_BARS:
+                top_items, _ = self.get_max_k(influence_vals, self.MAX_BARS)
                 labels = sorted(top_items)
             else:
                 labels = sorted(labels)
@@ -211,7 +248,7 @@ class DiversityMeasure(BaseMeasure):
             if show_scores:
                 ax.set_title(f'score: {score}\n{utils.to_valid_latex(title)}', fontdict={'fontsize': 10})
             else:
-                ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 14})
+                ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
             draw_bar(labels, aggregate_column, aggregated_result.mean(), [max_value],
                      xname=f'{bin_item.get_bin_name()} values', yname=bin_item.get_value_name(), ax=ax)
@@ -220,20 +257,80 @@ class DiversityMeasure(BaseMeasure):
         except Exception as e:
             # In the case of an exception, draw a bar chart using the draw_bar method defined outside the class
             columns = bin_item.get_binned_result_column()
-            title = self._fix_explanation(title, columns, max_value)
-            ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 14})
-            max_group_value = list(columns[columns == max_value].to_dict().keys())[0]
+            # Using a simple columns == max_value works, so long as the index is not a multi-index one.
+            # Otherwise, the max_value may end up being from one of the index levels, which will cause an exception as
+            # it is not in the columns.
+            if isinstance(columns.index, pd.MultiIndex) and not isinstance(max_value, tuple):
+                # Search the index for any match with the max value, even if it's from a subset of the index
+                # For example, if we have a MultiIndex with levels A,B,C, and the max value is from B, we can still
+                # find it in the index.
+                index = columns.index.to_frame()
+                # Get all locations in the index where the max_value is found
+                indexes = set()
+                for col in index.columns:
+                    col_indexes = index[index[col] == max_value].index
+                    if len(col_indexes) > 0:
+                        indexes.update(col_indexes)
+                # Get the columns corresponding to the max value
+                indexes = list(indexes)
+                max_group_value = list(columns.loc[indexes].to_dict().keys())
+                # We set this to also be equal, since this value will get accessed again in _fix_explanation, and it
+                # should match the way we fixed it here.
+                max_value = max_group_value
+            else:
+                max_group_value = list(columns[columns == max_value].to_dict().keys())[0]
+
+            # If there are more than 25 bars, limit the number of bars to 25
+            if len(columns) > self.MAX_BARS:
+                top_items, _ = self.get_max_k(influence_vals, self.MAX_BARS)
+                # Just like before, we need different handling for multi-index cases, in the case where there are
+                # multiple top items, but they are not tuples, i.e. they are not keys for the multi-index
+                if isinstance(columns.index, pd.MultiIndex) and not all([isinstance(i, tuple) for i in top_items]):
+                    index = columns.index.to_frame()
+                    # We use a list this time, because we need to maintain the same order as the top items
+                    indexes = []
+                    for item in top_items:
+                        for col in index.columns:
+                            col_indexes = index[index[col] == item].index
+                            if len(col_indexes) > 0:
+                                indexes.extend(col_indexes)
+                    if len(indexes) > len(columns):
+                        indexes = indexes[:len(columns)]
+                else:
+                    indexes = []
+                    # Get the indexes of the top items, in order of the top items
+                    for item in top_items:
+                        indexes.extend(columns[columns == item].index)
+                # Using the indexes in this way will automatically sort the columns such that their order matches that
+                # of the top items
+                columns = columns.loc[indexes]
+                columns = columns[:self.MAX_BARS]
+
+            # If the max value is not in the columns, add it to the columns
+            if not isinstance(max_group_value, list):
+                if max_group_value not in columns:
+                    columns = columns.append(pd.Series(max_value, index=[max_group_value]))
+            else:
+                # Not having the index sorted can raise a performance warning, so we sort it if it's not sorted
+                if not columns.index._is_lexsorted():
+                    columns = columns.sort_index()
+                for value in max_group_value:
+                    if value not in columns:
+                        columns = columns.append(pd.Series(max_value, index=[value]))
+
+            title = self._fix_explanation(title, columns, max_value, max_group_value)
+            ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
             draw_bar(list(columns.index),
                      list(columns),
                      average,
-                     [max_group_value],
+                     [max_group_value] if not isinstance(max_group_value, list) else max_group_value,
                      yname=bin_item.get_bin_name(), ax=ax)
 
             ax.set_axis_on()
 
     @staticmethod
-    def _fix_explanation(explanation: str, binned_column: Series, max_value) -> str:
+    def _fix_explanation(explanation: str, binned_column: Series, max_value, max_group_value) -> str:
         """
         Change explanation column to match group by
         :param explanation:  bin explanation
@@ -242,8 +339,13 @@ class DiversityMeasure(BaseMeasure):
 
         :return: new explanation
         """
-        max_group_value = list(binned_column[binned_column == max_value].to_dict().keys())[0]
-        max_value_name = binned_column.name.replace('_', '\\ ')
+        # Tuple is used to represent multi-index columns
+        # if isinstance(max_value, tuple):
+        #     max_group_value = list(binned_column.loc[max_value].to_dict().keys())[0]
+        # else:
+        #     max_group_value = list(binned_column[binned_column == max_value].to_dict().keys())[0]
+        binned_column_name = str(binned_column.name)
+        max_value_name = binned_column_name.replace('_', '\\ ')
         try:
             max_group_value.replace('$', '\\$')
             max_value_name.replace('$', '\\$')
@@ -352,7 +454,13 @@ class DiversityMeasure(BaseMeasure):
             # on those values and set the max value to the result of the aggregation function
             bin_values = current_bin.get_result_by_values([max_value])
             operation = self.get_agg_func_from_name(res_col.name)
-            max_value_numeric = operation(bin_values)
+            # If the operation is a callable function, call it with the bin values
+            if callable(operation):
+                max_value_numeric = operation(bin_values)
+            # Otherwise, it is a string, so we need to get the function from the OP_TO_FUNC dictionary
+            else:
+                operation = OP_TO_FUNC[operation]
+                max_value_numeric = operation(bin_values)
 
             # Get the name of the column with the maximum value, and compute the variance of the result column
             max_col_name = current_bin.get_bin_name()

@@ -123,8 +123,22 @@ class BaseMeasure(object):
 
     def _calc_measure(self, attr: str, dataset_relation: DatasetRelation, operation_object: Operation, scheme: dict,
                       use_only_columns: list, ignore=None,
-                      unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) \
+                      unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None,
+                      column_mapping: dict=None) \
             -> Tuple[str, float, str, Bins, Tuple[pd.Series, pd.Series]] | Tuple[str, float, None, None, None]:
+        """
+
+        :param attr: The attribute name.
+        :param dataset_relation: The dataset relation for the current attribute.
+        :param operation_object: The operation object for the current operation.
+        :param scheme: The scheme of the columns.
+        :param use_only_columns: A list of columns to include in the explanation. If empty, all columns will be included.
+        :param ignore: A list of columns to ignore in the explanation. Set to [] by default.
+        :param unsampled_source_df: The source DataFrame before sampling. Optional. Only needed if sampling is used.
+        :param unsampled_res_df: The result DataFrame before sampling. Optional. Only needed if sampling is used.
+        :param column_mapping: A dict mapping the original column names to the current column names. Optional. Needed in case some columns were renamed as part of a groupby operation.
+        :return:
+        """
         # If the attribute is in the ignore list, skip it.
         if attr in ignore:
             return attr, -1, None, None, None
@@ -153,7 +167,15 @@ class BaseMeasure(object):
         unsampled_bin_candidates = None
 
         if unsampled_source_df is not None and unsampled_res_df is not None:
-            source_col = unsampled_source_df[attr]
+            # source_col can be none in some groupby cases. We don't want to modify it if it is, as that may cause
+            # unexpected behavior.
+            if source_col is not None:
+                # In the case of groupby that creates tuple columns, we need to handle the case where the attribute in the
+                # result dataframe is a tuple that did not exist in the source dataframe.
+                if attr not in unsampled_source_df.columns and isinstance(attr, tuple):
+                    source_col = unsampled_source_df[attr[0]]
+                else:
+                    source_col = unsampled_source_df[attr] if attr not in column_mapping else unsampled_source_df[column_mapping[attr]]
             res_col = unsampled_res_df[attr]
             unsampled_bin_candidates = Bins(source_col, res_col, size)
 
@@ -168,7 +190,9 @@ class BaseMeasure(object):
                 (source_col, res_col))
 
     def calc_measure(self, operation_object: Operation, scheme: dict, use_only_columns: list, ignore=None,
-                     unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None) -> \
+                     unsampled_source_df: pd.DataFrame = None, unsampled_res_df: pd.DataFrame = None,
+                     column_mapping: dict=None, debug_mode: bool = False
+                     ) -> \
             Dict[str, float]:
         """
         Calculate the measure for each attribute in the operation_object.
@@ -177,11 +201,17 @@ class BaseMeasure(object):
         :param scheme: The scheme of the columns, in the form of a dictionary, where the key is the column name and the value is the scheme of the column. Columns with the scheme 'i' will be ignored.
         :param use_only_columns: A list of columns to include in the explanation. If empty, all columns will be included.
         :param ignore: A list of columns to ignore in the explanation. Set to [] by default.
+        :param unsampled_source_df: The unsampled source DataFrame. Optional. Only needed if sampling is used.
+        :param unsampled_res_df: The unsampled result DataFrame. Optional. Only needed if sampling is used.
+        :param column_mapping: A dict mapping the original column names to the current column names. Optional. Needed in case some columns were renamed as part of a groupby operation.
+        :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False.
         """
         # Set the operation object, the scheme, and the score dictionary to the given values.
         # Also initialize the max_val to -1.
         if ignore is None:
             ignore = []
+        if column_mapping is None:
+            column_mapping = {}
 
         self.operation_object = operation_object
         self.score_dict = {}
@@ -190,13 +220,19 @@ class BaseMeasure(object):
 
         # Iterate over the attributes in the operation object.
         # From limited testing, doing this in parallel gives a small performance boost.
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(self._calc_measure, attr, dataset_relation, operation_object, scheme, use_only_columns,
-                                ignore, unsampled_source_df, unsampled_res_df) for attr, dataset_relation in operation_object.iterate_attributes()
-            ]
-            for future in as_completed(futures):
-                attr, measure_score, source_name, bins, cols = future.result()
+        if not debug_mode:
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(self._calc_measure, attr, dataset_relation, operation_object, scheme, use_only_columns,
+                                    ignore, unsampled_source_df, unsampled_res_df, column_mapping) for attr, dataset_relation in operation_object.iterate_attributes()
+                ]
+                for future in as_completed(futures):
+                    attr, measure_score, source_name, bins, cols = future.result()
+                    if measure_score != -1:
+                        self.score_dict[attr] = (source_name, bins, measure_score, cols)
+        else:
+            for attr, dataset_relation in operation_object.iterate_attributes():
+                attr, measure_score, source_name, bins, cols = self._calc_measure(attr, dataset_relation, operation_object, scheme, use_only_columns, ignore, unsampled_source_df, unsampled_res_df, column_mapping)
                 if measure_score != -1:
                     self.score_dict[attr] = (source_name, bins, measure_score, cols)
 
@@ -364,7 +400,8 @@ class BaseMeasure(object):
 
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                       deleted=None) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure]:
+                       deleted=None, debug_mode: bool = False
+                       ) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure] | List[str] | None:
         """
         Calculate the influence of each attribute in the dataset.
 
@@ -377,9 +414,10 @@ class BaseMeasure(object):
         :param show_scores: Whether to show the scores on the plot. Default is False.
         :param title: The title of the plot. Optional.
         :param deleted: A dictionary of deleted attributes as keys, with the values as a tuple: (dataframe name, bin object, score, column values). Optional.
+        :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False.
 
         :return: A list (or a single) matplotlib figures containing the explanations for the top k attributes, after
-        computing the influence.
+        computing the influence. Alternatively, returns the names of the explained attributes, or None if no explanations were found.
         """
 
         # If deleted is not None, set the score dictionary to the deleted dictionary.
@@ -411,13 +449,17 @@ class BaseMeasure(object):
 
         # Iterate over the top K attributes, and get the influence values for each bin.
         # From limited testing, doing this in parallel gives a small performance boost.
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(self._calc_influence, score_dict, max_col_name, results_columns)
-                for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]
-            ]
-            for future in as_completed(futures):
-                results = pd.concat([results, future.result()], ignore_index=True)
+        if not debug_mode:
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(self._calc_influence, score_dict, max_col_name, results_columns)
+                    for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]
+                ]
+                for future in as_completed(futures):
+                    results = pd.concat([results, future.result()], ignore_index=True)
+        else:
+            for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]:
+                results = pd.concat([results, self._calc_influence(score_dict, max_col_name, results_columns)], ignore_index=True)
 
         results = results.drop(axis='index', index=0)
 
@@ -435,21 +477,33 @@ class BaseMeasure(object):
 
         # If there are no interesting explanations, print a message and return.
         if len(scores) == 0:
-            print(f'{source_name} dataset there is not interesting explanation')
+            print(f'Could not find any interesting explanations for your query over dataset {source_name}.')
             return
+
+        # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
+        title = title if title else self.build_operation_expression(source_name)
 
         # If K is greater than 1,
         # set the number of rows in the plot to the ceiling of the length of the scores divided by figs_in_row.
         if K > 1:  ###
             rows = math.ceil(len(scores) / figs_in_row)
-            fig, axes = plt.subplots(rows, figs_in_row, figsize=(5 * figs_in_row, 6 * rows))
+            fig, axes = plt.subplots(rows, figs_in_row, figsize=(7 * figs_in_row, 8 * rows))
             for ax in axes.reshape(-1):
                 ax.set_axis_off()
         else:
-            fig, axes = plt.subplots(figsize=(5, 5))
-
-        # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
-        title = title if title else self.build_operation_expression(source_name)
+            total_text_len = 0
+            if title:
+                total_text_len += len(title)
+            if explanations is not None and len(explanations) > 0:
+                total_text_len += len(explanations.iloc[0])
+            # If the text is so long that it probably won't fit properly in the figure, increase the figure size.
+            # Note that 300 is a fairly arbitrary threshold, made on an educated guess that the usual is around
+            # 150-250 characters long, and that 300+ is probably around where it starts to get too long.
+            if total_text_len > 300:
+                fig, axes = plt.subplots(figsize=(9, 11))
+            # Otherwise, use a smaller figure size.
+            else:
+                fig, axes = plt.subplots(figsize=(5, 6))
 
         fig.suptitle(title, fontsize=20)
 

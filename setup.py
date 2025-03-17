@@ -25,7 +25,7 @@ def get_long_description():
 
 setup(
     name='fedex_generator',
-    version='1.0.4',#get_version(),
+    version='1.0.5',#get_version(),
     package_dir={'': 'src'},
     packages=find_packages(where='src'),
     long_description_content_type="text/markdown",
@@ -35,12 +35,10 @@ setup(
     },
     install_requires=[
         'wheel',
-        'pandas',
-        'numpy',
-        'python-dotenv',
-        'singleton-decorator',
-        'ipython',
-        'scipy',
-        'paretoset',
+        'pandas>=2.2.3',
+        'numpy>=2.1.3',
+        'matplotlib>=3.9.0',
+        'scipy>=1.14.1',
+        'paretoset>=1.2.4',
     ]
 )
