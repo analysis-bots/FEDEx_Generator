@@ -51,6 +51,23 @@ class Operation:
         """
         raise NotImplementedError()
 
+    def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
+                      influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None) -> None:
+        """
+        Draws the figures for the explanations.
+        :param title: The title of the plot.
+        :param scores: The scores of the attributes.
+        :param K: The number of top attributes to consider.
+        :param figs_in_row: The number of figures to display in a row.
+        :param explanations: The explanations generated for the top K attributes.
+        :param bins: The bins of the attributes.
+        :param influence_vals: The influence values of the attributes.
+        :param source_name: The name of the source DataFrame.
+        :param show_scores: Whether to show the scores on the plot.
+        :param added_text: Additional text to add to the bottom of each figure. Optional. A dict with explanation as key, and a sub-dict with 'text' and 'position' as keys.
+        """
+        raise NotImplementedError()
+
     def present_deleted_correlated(self, figs_in_row: int = DEFAULT_FIGS_IN_ROW):
         """
         Present the attributes that were deleted due to high correlation.
