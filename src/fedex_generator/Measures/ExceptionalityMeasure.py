@@ -33,7 +33,7 @@ class ExceptionalityMeasure(BaseMeasure):
         super().__init__()
 
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title=None, ax=None, score=None,
-                 show_scores: bool = False) -> str:
+                 show_scores: bool = False, added_text: dict | None = None) -> str:
         """
         Draw a bar chart comparing the distribution of values before and after an operation.
 
@@ -46,6 +46,7 @@ class ExceptionalityMeasure(BaseMeasure):
         :param ax: The matplotlib axes object to draw the bar chart on (default is None).
         :param score: The score to be displayed in the title if show_scores is True (default is None).
         :param show_scores: A boolean indicating whether to display the score in the title (default is False).
+        :param added_text: A dictionary containing additional text to be displayed in the explanation (default is None). Expected keys are 'added_text' and 'position'.
 
         :return: The name of the bin.
         """
@@ -170,8 +171,13 @@ class ExceptionalityMeasure(BaseMeasure):
         from fedex_generator.Operations.Join import Join
 
         if isinstance(self.operation_object, Filter):
-            return f'Dataframe {self.operation_object.source_name}, ' \
-                   f'filtered on attribute {self.operation_object.attribute}'
+            if self.operation_object.value is not None and self.operation_object.operation_str is not None:
+                return f'Dataframe {self.operation_object.source_name}, ' \
+                       f'filtered on attribute {self.operation_object.attribute} ' \
+                       f'{self.operation_object.operation_str} {self.operation_object.value}'
+            else:
+                return f'Dataframe {self.operation_object.source_name}, ' \
+                       f'filtered on attribute {self.operation_object.attribute}'
         elif isinstance(self.operation_object, Join):
             return f'{self.operation_object.right_name} joined with {self.operation_object.left_name} by {self.operation_object.attribute}'
 

@@ -29,7 +29,7 @@ OP_TO_FUNC = {
 
 
 def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=None, xname=None, yname=None, alpha=1.,
-             ax=None, footnote: str = None):
+             ax=None, added_text: dict | None = None):
     """
     Draw a bar chart with optional features.
 
@@ -42,6 +42,7 @@ def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=No
     :param yname: Optional; label for the y-axis.
     :param alpha: Optional; transparency level of the bars (default is 1.0).
     :param ax: Optional; matplotlib axes object to draw the bar chart on.
+    :param added_text: Optional; additional text to add to the plot. Expected format is a dictionary with the following keys: 'added_text', 'position'.
     """
 
     width = 0.5
@@ -83,6 +84,14 @@ def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=No
 
     if yname is not None:
         ax.set_ylabel(utils.to_valid_latex_with_escaped_dollar_char(yname), fontsize=24)
+
+    if added_text is not None:
+        text = added_text['added_text']
+        position = added_text['position']
+        if position == 'bottom':
+            ax.text(0, -0.2, text, fontsize=10, transform=ax.transAxes)
+        elif position == 'top':
+            ax.text(0, 1.1, text, fontsize=10, transform=ax.transAxes)
 
 
 def flatten_other_indexes(series, main_index):
@@ -193,7 +202,7 @@ class DiversityMeasure(BaseMeasure):
 
 
     def draw_bar(self, bin_item: MultiIndexBin, influence_vals: dict = None, title=None, ax=None, score=None,
-                 show_scores: bool = False):
+                 show_scores: bool = False, added_text: dict | None = None):
         """
         Draw a bar chart for a given bin item with optional features.
 
@@ -206,6 +215,7 @@ class DiversityMeasure(BaseMeasure):
         :param ax: Optional; the matplotlib axes object to draw the bar chart on.
         :param score: Optional; the score to be displayed in the title if `show_scores` is True.
         :param show_scores: Optional; a boolean indicating whether to display the score in the title (default is False).
+        :param added_text: Optional; additional text to add to the plot. Expected format is a dictionary with the following keys: 'added_text', 'position'.
         """
         try:
             # Get the index of the maximum value and its influence
@@ -251,7 +261,8 @@ class DiversityMeasure(BaseMeasure):
                 ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
             draw_bar(labels, aggregate_column, aggregated_result.mean(), [max_value],
-                     xname=f'{bin_item.get_bin_name()} values', yname=bin_item.get_value_name(), ax=ax)
+                     xname=f'{bin_item.get_bin_name()} values', yname=bin_item.get_value_name(),
+                     ax=ax, added_text=added_text)
             ax.set_axis_on()
 
         except Exception as e:
@@ -325,7 +336,10 @@ class DiversityMeasure(BaseMeasure):
                      list(columns),
                      average,
                      [max_group_value] if not isinstance(max_group_value, list) else max_group_value,
-                     yname=bin_item.get_bin_name(), ax=ax)
+                     yname=bin_item.get_bin_name(),
+                     ax=ax,
+                     added_text=added_text
+                     )
 
             ax.set_axis_on()
 

@@ -330,7 +330,7 @@ class BaseMeasure(object):
         return max_indices, max_influences
 
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title: str = None, ax=None, score=None,
-                 show_scores: bool = False, additiona_bottom_text: str | None = None) -> None:
+                 show_scores: bool = False, added_text: dict | None = None) -> None:
         """
         Draw a bar plot for the given bin item and influence values.
         This is an abstract method, and should be implemented by the inheriting class.
@@ -340,7 +340,7 @@ class BaseMeasure(object):
         :param ax: The axes to draw the plot on. Optional.
         :param score: The score of the bin item. Optional.
         :param show_scores: Whether to show the scores on the plot. Optional.
-        :param additiona_bottom_text: Additional text to add to the bottom of the plot. Optional.
+        :param added_text: Additional text to add to the plot. Optional. Expected format example: {'added_text': 'text', 'position': 'bottom'}
         """
         raise NotImplementedError()
 
@@ -451,7 +451,8 @@ class BaseMeasure(object):
 
             fig = self.draw_bar(current_bin, current_influence_vals, title=explanation,
                                 ax=axes.reshape(-1)[index] if K > 1 else axes, score=score,
-                                show_scores=show_scores)  ###
+                                show_scores=show_scores,
+                                added_text=added_text[explanation] if added_text is not None else None)  ###
             if fig:
                 figures.append(fig)
 
@@ -462,7 +463,7 @@ class BaseMeasure(object):
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                        deleted=None, debug_mode: bool = False, draw_figures: bool = True
-                       ) -> tuple[str | None, Any, int | Any, int, Any, Any, Any, Any, bool] | None | Figure | list[
+                       ) -> Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | None | Figure | list[
         Figure] | list[str]:
         """
         Calculate the influence of each attribute in the dataset.
@@ -509,7 +510,6 @@ class BaseMeasure(object):
         # Concatenating an empty dataframe with another dataframe is deprecated, so we initialize it with a single empty row.
         # This row will be dropped later.
         results = pd.DataFrame([["", "","","","",""]], columns=results_columns)
-        figures = []
 
         # Iterate over the top K attributes, and get the influence values for each bin.
         # From limited testing, doing this in parallel gives a small performance boost.
@@ -542,7 +542,7 @@ class BaseMeasure(object):
         # If there are no interesting explanations, print a message and return.
         if len(scores) == 0:
             print(f'Could not find any interesting explanations for your query over dataset {source_name}.')
-            return
+            return None
 
         if draw_figures:
             figures = self.draw_figures(

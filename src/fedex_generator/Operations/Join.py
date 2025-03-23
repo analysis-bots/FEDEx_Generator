@@ -75,7 +75,7 @@ class Join(Operation.Operation):
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
                 use_sampling: bool = True, sample_size: int | float = Operation.SAMPLE_SIZE,
                 debug_mode: bool = False, draw_figures: bool = False
-                ):
+                ) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool]:
         """
         Explain for filter operation
 

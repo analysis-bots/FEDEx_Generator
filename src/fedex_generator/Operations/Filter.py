@@ -51,11 +51,11 @@ class Filter(Operation.Operation):
         self.not_presented = {}
         self.corr = self.source_df.corr(numeric_only=True)
         self.type = 'filter'
+        self.operation_str = operation_str
+        self.value = value
 
         # If the result_df is not given, we calculate it.
         if result_df is None:
-            self.operation_str = operation_str
-            self.value = value
             self.result_df = self.source_df[do_operation(self.source_df[attribute], value, operation_str)]
         else:
             self.result_df = result_df
@@ -151,7 +151,7 @@ class Filter(Operation.Operation):
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
                 use_sampling: bool = True, sample_size=Operation.SAMPLE_SIZE, debug_mode: bool = False,
-                draw_figures: bool = True) -> None | Tuple:
+                draw_figures: bool = True) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool]:
         """
         Explain for filter operation
 

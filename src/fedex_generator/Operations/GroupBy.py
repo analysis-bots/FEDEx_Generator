@@ -73,7 +73,7 @@ class GroupBy(Operation.Operation):
                 corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[],
                 use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE,
                 debug_mode: bool = False, draw_figures: bool = True
-                ):
+                ) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool]:
         """
         Explain for group by operation
         :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
