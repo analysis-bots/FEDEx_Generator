@@ -33,7 +33,7 @@ class ExceptionalityMeasure(BaseMeasure):
         super().__init__()
 
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title=None, ax=None, score=None,
-                 show_scores: bool = False, added_text: dict | None = None) -> str:
+                 show_scores: bool = False) -> str:
         """
         Draw a bar chart comparing the distribution of values before and after an operation.
 
@@ -46,7 +46,6 @@ class ExceptionalityMeasure(BaseMeasure):
         :param ax: The matplotlib axes object to draw the bar chart on (default is None).
         :param score: The score to be displayed in the title if show_scores is True (default is None).
         :param show_scores: A boolean indicating whether to display the score in the title (default is False).
-        :param added_text: A dictionary containing additional text to be displayed in the explanation (default is None). Expected keys are 'added_text' and 'position'.
 
         :return: The name of the bin.
         """

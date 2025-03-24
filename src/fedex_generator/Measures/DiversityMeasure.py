@@ -29,7 +29,7 @@ OP_TO_FUNC = {
 
 
 def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=None, xname=None, yname=None, alpha=1.,
-             ax=None, added_text: dict | None = None):
+             ax=None):
     """
     Draw a bar chart with optional features.
 
@@ -42,7 +42,6 @@ def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=No
     :param yname: Optional; label for the y-axis.
     :param alpha: Optional; transparency level of the bars (default is 1.0).
     :param ax: Optional; matplotlib axes object to draw the bar chart on.
-    :param added_text: Optional; additional text to add to the plot. Expected format is a dictionary with the following keys: 'added_text', 'position'.
     """
 
     width = 0.5
@@ -84,14 +83,6 @@ def draw_bar(x: list, y: list, avg_line=None, items_to_bold=None, head_values=No
 
     if yname is not None:
         ax.set_ylabel(utils.to_valid_latex_with_escaped_dollar_char(yname), fontsize=24)
-
-    if added_text is not None:
-        text = added_text['added_text']
-        position = added_text['position']
-        if position == 'bottom':
-            ax.text(0, -0.2, text, fontsize=10, transform=ax.transAxes)
-        elif position == 'top':
-            ax.text(0, 1.1, text, fontsize=10, transform=ax.transAxes)
 
 
 def flatten_other_indexes(series, main_index):
@@ -163,7 +154,8 @@ class DiversityMeasure(BaseMeasure):
             name = "_".join(x for x in name)
             operation = name.lower()
         else:
-            raise TypeError(f"The type of the column name is {type(name)}, which we the developers did not expect and do not know how to handle. If you are a developer, please fix this. If you are a user, please report this. Thank you.")
+            raise TypeError(
+                f"The type of the column name is {type(name)}, which we the developers did not expect and do not know how to handle. If you are a developer, please fix this. If you are a user, please report this. Thank you.")
 
         # Check if the name corresponds to a method of `pd.Series` or is in the `OP_TO_FUNC` dictionary
         # If the operation is a method of `pd.Series`, we can quickly return the function. Unless the operation name coincides with a column name,
@@ -200,9 +192,8 @@ class DiversityMeasure(BaseMeasure):
         # aggregation_index = res.index(name)
         # return list(self.operation_object.agg_dict.values())[0][aggregation_index]
 
-
     def draw_bar(self, bin_item: MultiIndexBin, influence_vals: dict = None, title=None, ax=None, score=None,
-                 show_scores: bool = False, added_text: dict | None = None):
+                 show_scores: bool = False):
         """
         Draw a bar chart for a given bin item with optional features.
 
@@ -215,7 +206,6 @@ class DiversityMeasure(BaseMeasure):
         :param ax: Optional; the matplotlib axes object to draw the bar chart on.
         :param score: Optional; the score to be displayed in the title if `show_scores` is True.
         :param show_scores: Optional; a boolean indicating whether to display the score in the title (default is False).
-        :param added_text: Optional; additional text to add to the plot. Expected format is a dictionary with the following keys: 'added_text', 'position'.
         """
         try:
             # Get the index of the maximum value and its influence
@@ -262,7 +252,7 @@ class DiversityMeasure(BaseMeasure):
 
             draw_bar(labels, aggregate_column, aggregated_result.mean(), [max_value],
                      xname=f'{bin_item.get_bin_name()} values', yname=bin_item.get_value_name(),
-                     ax=ax, added_text=added_text)
+                     ax=ax)
             ax.set_axis_on()
 
         except Exception as e:
@@ -338,7 +328,6 @@ class DiversityMeasure(BaseMeasure):
                      [max_group_value] if not isinstance(max_group_value, list) else max_group_value,
                      yname=bin_item.get_bin_name(),
                      ax=ax,
-                     added_text=added_text
                      )
 
             ax.set_axis_on()

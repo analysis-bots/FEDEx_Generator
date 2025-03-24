@@ -329,8 +329,13 @@ class BaseMeasure(object):
         max_influences = influence_vals_max_indexes[-k:][::-1]
         return max_indices, max_influences
 
+
+    @staticmethod
+    def _fix_explanation(explanation: str, binned_column: pd.Series, max_value, max_group_value) -> str:
+        return explanation
+
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title: str = None, ax=None, score=None,
-                 show_scores: bool = False, added_text: dict | None = None) -> None:
+                 show_scores: bool = False) -> None:
         """
         Draw a bar plot for the given bin item and influence values.
         This is an abstract method, and should be implemented by the inheriting class.
@@ -340,7 +345,6 @@ class BaseMeasure(object):
         :param ax: The axes to draw the plot on. Optional.
         :param score: The score of the bin item. Optional.
         :param show_scores: Whether to show the scores on the plot. Optional.
-        :param added_text: Additional text to add to the plot. Optional. Expected format example: {'added_text': 'text', 'position': 'bottom'}
         """
         raise NotImplementedError()
 
@@ -449,16 +453,51 @@ class BaseMeasure(object):
         for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
                 zip(explanations, bins, influence_vals, scores)):
 
-            fig = self.draw_bar(current_bin, current_influence_vals, title=explanation,
+            figure = self.draw_bar(current_bin, current_influence_vals, title=explanation,
                                 ax=axes.reshape(-1)[index] if K > 1 else axes, score=score,
                                 show_scores=show_scores,
-                                added_text=added_text[explanation] if added_text is not None else None)  ###
-            if fig:
-                figures.append(fig)
+                                added_text=None)  ###
+            if figure:
+                figures.append(figure)
 
         plt.tight_layout()
 
-        return figures if len(figures) > 0 else fig
+        if added_text is not None:
+            # Draw the figure to establish precise bounding boxes
+            plt.draw()
+            for explanation, ax in zip(explanations, axes.reshape(-1)):
+                renderer = ax.figure.canvas.get_renderer()
+                max_label_height = 0
+
+                # Check all x-tick labels plus the x-axis label itself to find the maximum height
+                for label in ax.get_xticklabels() + [ax.xaxis.get_label()]:
+                    bbox = label.get_window_extent(renderer=renderer)
+                    if bbox.height > max_label_height:
+                        max_label_height = bbox.height
+
+
+
+                # Add a little bit of padding
+                offset_in_points = -(max_label_height + 10)
+                llm_explanation = added_text[explanation]
+                llm_text = llm_explanation["added_text"]
+                llm_position = llm_explanation["position"]
+
+                ax.annotate(
+                    llm_text,
+                    xy=(0.5, 0),  # anchor at the bottom of the axes
+                    xycoords='axes fraction',
+                    xytext=(0, offset_in_points),
+                    textcoords='offset points',
+                    ha='center', va='top',
+                    fontsize=16
+                )
+
+            # Adding hspace of 1.5 seems to generally give enough space for the added text, without
+            # squishing the plots too much or leaving too much empty space.
+            plt.subplots_adjust(hspace=1.5)
+
+        return figures if len(figures) > 0 else figure
 
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
