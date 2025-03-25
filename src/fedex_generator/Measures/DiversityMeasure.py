@@ -258,66 +258,11 @@ class DiversityMeasure(BaseMeasure):
         except Exception as e:
             # In the case of an exception, draw a bar chart using the draw_bar method defined outside the class
             columns = bin_item.get_binned_result_column()
-            # Using a simple columns == max_value works, so long as the index is not a multi-index one.
-            # Otherwise, the max_value may end up being from one of the index levels, which will cause an exception as
-            # it is not in the columns.
-            if isinstance(columns.index, pd.MultiIndex) and not isinstance(max_value, tuple):
-                # Search the index for any match with the max value, even if it's from a subset of the index
-                # For example, if we have a MultiIndex with levels A,B,C, and the max value is from B, we can still
-                # find it in the index.
-                index = columns.index.to_frame()
-                # Get all locations in the index where the max_value is found
-                indexes = set()
-                for col in index.columns:
-                    col_indexes = index[index[col] == max_value].index
-                    if len(col_indexes) > 0:
-                        indexes.update(col_indexes)
-                # Get the columns corresponding to the max value
-                indexes = list(indexes)
-                max_group_value = list(columns.loc[indexes].to_dict().keys())
-                # We set this to also be equal, since this value will get accessed again in _fix_explanation, and it
-                # should match the way we fixed it here.
-                max_value = max_group_value
-            else:
-                max_group_value = list(columns[columns == max_value].to_dict().keys())[0]
+            max_group_value = self._find_max_group_value(columns, max_value)
 
             # If there are more than 25 bars, limit the number of bars to 25
             if len(columns) > self.MAX_BARS:
-                top_items, _ = self.get_max_k(influence_vals, self.MAX_BARS)
-                # Just like before, we need different handling for multi-index cases, in the case where there are
-                # multiple top items, but they are not tuples, i.e. they are not keys for the multi-index
-                if isinstance(columns.index, pd.MultiIndex) and not all([isinstance(i, tuple) for i in top_items]):
-                    index = columns.index.to_frame()
-                    # We use a list this time, because we need to maintain the same order as the top items
-                    indexes = []
-                    for item in top_items:
-                        for col in index.columns:
-                            col_indexes = index[index[col] == item].index
-                            if len(col_indexes) > 0:
-                                indexes.extend(col_indexes)
-                    if len(indexes) > len(columns):
-                        indexes = indexes[:len(columns)]
-                else:
-                    indexes = []
-                    # Get the indexes of the top items, in order of the top items
-                    for item in top_items:
-                        indexes.extend(columns[columns == item].index)
-                # Using the indexes in this way will automatically sort the columns such that their order matches that
-                # of the top items
-                columns = columns.loc[indexes]
-                columns = columns[:self.MAX_BARS]
-
-            # If the max value is not in the columns, add it to the columns
-            if not isinstance(max_group_value, list):
-                if max_group_value not in columns:
-                    columns = columns.append(pd.Series(max_value, index=[max_group_value]))
-            else:
-                # Not having the index sorted can raise a performance warning, so we sort it if it's not sorted
-                if not columns.index._is_lexsorted():
-                    columns = columns.sort_index()
-                for value in max_group_value:
-                    if value not in columns:
-                        columns = columns.append(pd.Series(max_value, index=[value]))
+                columns = self._select_top_columns(influence_vals, columns, max_value, max_group_value)
 
             title = self._fix_explanation(title, columns, max_value, max_group_value)
             ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
@@ -331,6 +276,87 @@ class DiversityMeasure(BaseMeasure):
                      )
 
             ax.set_axis_on()
+
+
+    def _find_max_group_value(self, columns, max_value) -> str | list:
+        """
+        Finds the group value corresponding to the max value in the columns.
+        :param columns: The columns to search for the max value.
+        :param max_value: The max value to search for in the columns.
+        :return: The group value corresponding to the max value.
+        """
+        # Using a simple columns == max_value works, so long as the index is not a multi-index one.
+        # Otherwise, the max_value may end up being from one of the index levels, which will cause an exception as
+        # it is not in the columns.
+        if isinstance(columns.index, pd.MultiIndex) and not isinstance(max_value, tuple):
+            # Search the index for any match with the max value, even if it's from a subset of the index
+            # For example, if we have a MultiIndex with levels A,B,C, and the max value is from B, we can still
+            # find it in the index.
+            index = columns.index.to_frame()
+            # Get all locations in the index where the max_value is found
+            indexes = set()
+            for col in index.columns:
+                col_indexes = index[index[col] == max_value].index
+                if len(col_indexes) > 0:
+                    indexes.update(col_indexes)
+            # Get the columns corresponding to the max value
+            indexes = list(indexes)
+            max_group_value = list(columns.loc[indexes].to_dict().keys())
+            # We set this to also be equal, since this value will get accessed again in _fix_explanation, and it
+            # should match the way we fixed it here.
+            max_value = max_group_value
+        else:
+            max_group_value = list(columns[columns == max_value].to_dict().keys())[0]
+
+        return max_group_value
+
+
+    def _select_top_columns(self, influence_vals, columns, max_value, max_group_value) -> pd.Series:
+        """
+        Select the top columns to display in the bar chart.
+        :param influence_vals: The influence values of the columns.
+        :param columns: The columns to select the top items from.
+        :param max_value: The max value found.
+        :param max_group_value: The name of the group corresponding to the max value.
+        :return: The top columns to display in the bar chart.
+        """
+        top_items, _ = self.get_max_k(influence_vals, self.MAX_BARS)
+        # Just like before, we need different handling for multi-index cases, in the case where there are
+        # multiple top items, but they are not tuples, i.e. they are not keys for the multi-index
+        if isinstance(columns.index, pd.MultiIndex) and not all([isinstance(i, tuple) for i in top_items]):
+            index = columns.index.to_frame()
+            # We use a list this time, because we need to maintain the same order as the top items
+            indexes = []
+            for item in top_items:
+                for col in index.columns:
+                    col_indexes = index[index[col] == item].index
+                    if len(col_indexes) > 0:
+                        indexes.extend(col_indexes)
+            if len(indexes) > len(columns):
+                indexes = indexes[:len(columns)]
+        else:
+            indexes = []
+            # Get the indexes of the top items, in order of the top items
+            for item in top_items:
+                indexes.extend(columns[columns == item].index)
+        # Using the indexes in this way will automatically sort the columns such that their order matches that
+        # of the top items
+        columns = columns.loc[indexes]
+        columns = columns[:self.MAX_BARS]
+
+        # If the max value is not in the columns, add it to the columns
+        if not isinstance(max_group_value, list):
+            if max_group_value not in columns:
+                columns = columns.append(pd.Series(max_value, index=[max_group_value]))
+        else:
+            # Not having the index sorted can raise a performance warning, so we sort it if it's not sorted
+            if not columns.index._is_lexsorted():
+                columns = columns.sort_index()
+            for value in max_group_value:
+                if value not in columns:
+                    columns = columns.append(pd.Series(max_value, index=[value]))
+
+        return columns
 
     @staticmethod
     def _fix_explanation(explanation: str, binned_column: Series, max_value, max_group_value) -> str:
@@ -358,6 +384,14 @@ class DiversityMeasure(BaseMeasure):
 
         return explanation.replace(f'\'{max_value_name}\'=\'{max_value}\'',
                                    f'\'{group_by_name}\' = \'{max_group_value}\'')
+
+
+    def _try_fix_explanation(self, explanation: str, binned_column: MultiIndexBin, max_value) -> str:
+        columns = binned_column.get_binned_result_column()
+        max_group_value = self._find_max_group_value(columns, max_value)
+        return self._fix_explanation(explanation, columns, max_value, max_group_value)
+
+
 
     def interestingness_only_explanation(self, source_col: Series, result_col: Series, col_name: str) -> str:
         return f"After employing the GroupBy operation we can see highly diverse set of values in the column '{col_name}'\n" \

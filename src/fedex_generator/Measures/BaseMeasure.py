@@ -330,8 +330,18 @@ class BaseMeasure(object):
         return max_indices, max_influences
 
 
-    @staticmethod
-    def _fix_explanation(explanation: str, binned_column: pd.Series, max_value, max_group_value) -> str:
+
+    def _try_fix_explanation(self, explanation: str, binned_column: pd.Series, max_value) -> str:
+        """
+        If the explanation is not valid, for example in the case of group-bys where we have a value instead
+        of the group names, try to fix it.
+        Override this method in the inheriting class if needed, otherwise leave as is (returns the explanation as is).
+        :param explanation: The explanation to fix.
+        :param binned_column: The binned column.
+        :param max_value: The max value of the bin.
+        :param max_group_value: The group with the max value.
+        :return:
+        """
         return explanation
 
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title: str = None, ax=None, score=None,
@@ -393,6 +403,7 @@ class BaseMeasure(object):
                 if significance < SIGNIFICANCE_THRESHOLD:
                     continue
                 explanation = self.build_explanation(current_bin, max_col_name, max_value, source_name)
+                explanation = self._try_fix_explanation(explanation, current_bin, max_value)
 
                 # Save the results in a dictionary and append it to the results dataframe.
                 new_result = dict(zip(results_columns,
@@ -455,8 +466,7 @@ class BaseMeasure(object):
 
             figure = self.draw_bar(current_bin, current_influence_vals, title=explanation,
                                 ax=axes.reshape(-1)[index] if K > 1 else axes, score=score,
-                                show_scores=show_scores,
-                                added_text=None)  ###
+                                show_scores=show_scores)  ###
             if figure:
                 figures.append(figure)
 
@@ -496,6 +506,8 @@ class BaseMeasure(object):
             # Adding hspace of 1.5 seems to generally give enough space for the added text, without
             # squishing the plots too much or leaving too much empty space.
             plt.subplots_adjust(hspace=1.5)
+        # Adding a bit of a top margin to the plot, to make sure the title doesn't interfere with the plots.
+        plt.subplots_adjust(top=0.92)
 
         return figures if len(figures) > 0 else figure
 
