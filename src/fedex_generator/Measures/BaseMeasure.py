@@ -488,20 +488,34 @@ class BaseMeasure(object):
 
 
                 # Add a little bit of padding
-                offset_in_points = -(max_label_height + 10)
-                llm_explanation = added_text[explanation]
-                llm_text = llm_explanation["added_text"]
-                llm_position = llm_explanation["position"]
+                added_text_dict = added_text[explanation]
+                text = added_text_dict["added_text"]
+                position = added_text_dict["position"]
 
-                ax.annotate(
-                    llm_text,
-                    xy=(0.5, 0),  # anchor at the bottom of the axes
-                    xycoords='axes fraction',
-                    xytext=(0, offset_in_points),
-                    textcoords='offset points',
-                    ha='center', va='top',
-                    fontsize=16
-                )
+                if position == "bottom":
+                    offset_in_points = -(max_label_height + 10)
+
+                    ax.annotate(
+                        text,
+                        xy=(0.5, 0),  # anchor at the bottom of the axes
+                        xycoords='axes fraction',
+                        xytext=(0, offset_in_points),
+                        textcoords='offset points',
+                        ha='center', va='top',
+                        fontsize=16
+                    )
+                elif position == "top":
+                    offset_in_points = max_label_height + 10
+
+                    ax.annotate(
+                        text,
+                        xy=(0.5, 1),  # anchor at the top of the axes
+                        xycoords='axes fraction',
+                        xytext=(0, offset_in_points),
+                        textcoords='offset points',
+                        ha='center', va='bottom',
+                        fontsize=16
+                    )
 
             # Adding hspace of 1.5 seems to generally give enough space for the added text, without
             # squishing the plots too much or leaving too much empty space.
