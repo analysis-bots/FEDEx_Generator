@@ -458,7 +458,7 @@ class BaseMeasure(object):
             else:
                 fig, axes = plt.subplots(figsize=(5, 6))
 
-        fig.suptitle(title, fontsize=20)
+        fig.suptitle(title, fontsize=20, y=1.02)
 
         # Draw the bar plots for each explanation
         for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
