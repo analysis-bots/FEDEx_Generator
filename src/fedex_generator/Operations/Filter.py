@@ -151,7 +151,8 @@ class Filter(Operation.Operation):
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
                 use_sampling: bool = True, sample_size=Operation.SAMPLE_SIZE, debug_mode: bool = False,
-                draw_figures: bool = True) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool]:
+                draw_figures: bool = True, return_scores: bool = False)\
+            -> (None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple):
         """
         Explain for filter operation
 
@@ -171,6 +172,7 @@ class Filter(Operation.Operation):
         :param sample_size: The sample size to use when using sampling. Can be a number or a percentage of the dataframe size. Default is 5000.
         :param debug_mode: Developer option for debugging. Disables multiprocessing when enabled. Can also be used to print additional information. Default is False.
         :param draw_figures: Whether to draw the figures at this stage, or to return the raw explanations, to be drawn later with potentially more added to them. Default is True.
+        :param return_scores: Whether to return the scores of the measure or not. Default is False.
 
         :return: explain figures
         """
@@ -206,11 +208,19 @@ class Filter(Operation.Operation):
                 self.correlated_notes(figures, top_k)
 
         else:
-            return measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+
+            ret_val = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                           show_scores=show_scores, title=title, debug_mode=debug_mode,
                                           draw_figures=draw_figures)
+            if return_scores:
+                return ret_val, scores
+            else:
+                return ret_val, None
 
-        return None
+        if not return_scores:
+            return None, None
+        else:
+            return None, scores
 
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series,
                      bins: pd.Series,

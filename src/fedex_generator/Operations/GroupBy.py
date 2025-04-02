@@ -72,8 +72,8 @@ class GroupBy(Operation.Operation):
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[],
                 use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE,
-                debug_mode: bool = False, draw_figures: bool = True
-                ) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool]:
+                debug_mode: bool = False, draw_figures: bool = True, return_scores: bool = False,
+                ) -> (None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple):
         """
         Explain for group by operation
         :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
@@ -112,9 +112,13 @@ class GroupBy(Operation.Operation):
         if use_sampling:
             self.source_df, self.result_df = backup_source_df, backup_res_df
 
-        return measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+        ret_val = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                           show_scores=show_scores, title=title, debug_mode=debug_mode,
                                           draw_figures=draw_figures)
+        if return_scores:
+            return ret_val, scores
+        else:
+            return ret_val, None
 
 
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,

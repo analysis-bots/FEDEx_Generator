@@ -74,8 +74,8 @@ class Join(Operation.Operation):
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
                 use_sampling: bool = True, sample_size: int | float = Operation.SAMPLE_SIZE,
-                debug_mode: bool = False, draw_figures: bool = False
-                ) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool]:
+                debug_mode: bool = False, draw_figures: bool = False, return_scores: bool = False
+                ) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple:
         """
         Explain for filter operation
 
@@ -89,6 +89,7 @@ class Join(Operation.Operation):
         :param sample_size: the size of the sample to use. Can be a percentage of the dataframe size if below 1. Default is 5000.
         :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False. Can possibly add more debug options in the future.
         :param draw_figures: Whether or not to draw the figures in this stage. Defaults to True. Set to False if you want to draw the figures later.
+        :param return_scores: Whether or not to return the scores. Defaults to False.
 
         :return: explain figures
         """
@@ -109,7 +110,7 @@ class Join(Operation.Operation):
             #     exp += '\n and then\n'
             #     exp += str(facts[fact_idx][0])
             #     top_k -= 1
-            return
+            return None
         if attributes is None:
             attributes = []
 
@@ -135,9 +136,14 @@ class Join(Operation.Operation):
         if use_sampling:
             self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
 
-        return measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+        ret_val = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                       show_scores=show_scores, title=title, debug_mode=debug_mode,
                                       draw_figures=draw_figures)
+
+        if return_scores:
+            return ret_val, scores
+        else:
+            return ret_val, None
 
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
                       influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None) -> None:
