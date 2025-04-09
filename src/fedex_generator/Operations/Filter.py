@@ -151,7 +151,7 @@ class Filter(Operation.Operation):
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
                 use_sampling: bool = True, sample_size=Operation.SAMPLE_SIZE, debug_mode: bool = False,
-                draw_figures: bool = True, return_scores: bool = False)\
+                draw_figures: bool = True, return_scores: bool = False, measure_only: bool = False)\
             -> (None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple):
         """
         Explain for filter operation
@@ -197,6 +197,9 @@ class Filter(Operation.Operation):
 
         if use_sampling:
             self.source_df, self.result_df = source_df_backup, result_df_backup
+
+        if measure_only:
+            return scores
 
         self.delete_correlated_atts(measure, TH=corr_TH)
         if draw_figures:

@@ -470,8 +470,6 @@ class BaseMeasure(object):
             if figure:
                 figures.append(figure)
 
-        plt.tight_layout()
-
         if added_text is not None:
             # Draw the figure to establish precise bounding boxes
             plt.draw()
@@ -522,6 +520,7 @@ class BaseMeasure(object):
             plt.subplots_adjust(hspace=1.5)
         # Adding a bit of a top margin to the plot, to make sure the title doesn't interfere with the plots.
         plt.subplots_adjust(top=0.92)
+        plt.tight_layout()
 
         return figures if len(figures) > 0 else figure
 

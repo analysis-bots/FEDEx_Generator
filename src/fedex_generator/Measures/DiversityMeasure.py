@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 from numpy import number
@@ -176,8 +177,12 @@ class DiversityMeasure(BaseMeasure):
         res = []
         # Search within the `agg_dict` of the `operation_object`.
         for x in self.operation_object.agg_dict:
-            for y in self.operation_object.agg_dict[x]:
-                res.append(x + '_' + (y if isinstance(y, str) else y.__name__))
+            op = self.operation_object.agg_dict[x]
+            if not isinstance(op, str):
+                for y in op:
+                    res.append(x + '_' + (y if isinstance(y, str) else y.__name__))
+            else:
+                res.append(x + '_' + op)
         # Note that this can fail if the agg_dict it not set properly, or if the name is not in the agg_dict.
         # For example, if the column is "All", meaning all columns are aggregated, then the name will not be in the
         # agg_dict, and this will fail.
@@ -187,8 +192,16 @@ class DiversityMeasure(BaseMeasure):
         except ValueError as e:
             if any([x.startswith("All_") for x in res]):
                 return list(self.operation_object.agg_dict.values())[0][0]
-            else:
-                raise e
+            # It is also possible that we get names that don't include the aggregation function, but are still
+            # valid, like "col_name", and res will have "col_name_mean" in it.
+            # This won't be caught anywhere above, so we check for it here.
+            contains_name = [x for x in res if x.startswith(name)]
+            if len(contains_name) > 0:
+                agg_funcs = [x.split("_")[-1] for x in contains_name]
+                # We return a random function from the list of aggregation functions, since we don't know which one to use.
+                return np.random.choice(agg_funcs)
+
+            raise e
         # aggregation_index = res.index(name)
         # return list(self.operation_object.agg_dict.values())[0][aggregation_index]
 

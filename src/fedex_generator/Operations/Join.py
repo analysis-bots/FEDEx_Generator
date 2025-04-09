@@ -74,7 +74,8 @@ class Join(Operation.Operation):
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
                 use_sampling: bool = True, sample_size: int | float = Operation.SAMPLE_SIZE,
-                debug_mode: bool = False, draw_figures: bool = False, return_scores: bool = False
+                debug_mode: bool = False, draw_figures: bool = False, return_scores: bool = False,
+                measure_only: bool = False
                 ) -> None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple:
         """
         Explain for filter operation
@@ -135,6 +136,9 @@ class Join(Operation.Operation):
 
         if use_sampling:
             self.left_df, self.right_df, self.result_df = backup_left_df, backup_right_df, backup_res_df
+
+        if measure_only:
+            return scores
 
         ret_val = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                       show_scores=show_scores, title=title, debug_mode=debug_mode,

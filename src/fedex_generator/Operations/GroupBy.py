@@ -73,6 +73,7 @@ class GroupBy(Operation.Operation):
                 corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[],
                 use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE,
                 debug_mode: bool = False, draw_figures: bool = True, return_scores: bool = False,
+                measure_only: bool = False
                 ) -> (None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple):
         """
         Explain for group by operation
@@ -111,6 +112,9 @@ class GroupBy(Operation.Operation):
 
         if use_sampling:
             self.source_df, self.result_df = backup_source_df, backup_res_df
+
+        if measure_only:
+            return scores
 
         ret_val = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
                                           show_scores=show_scores, title=title, debug_mode=debug_mode,
