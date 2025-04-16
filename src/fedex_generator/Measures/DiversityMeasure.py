@@ -189,7 +189,7 @@ class DiversityMeasure(BaseMeasure):
         try:
             aggregation_index = res.index(name)
             return list(self.operation_object.agg_dict.values())[0][aggregation_index]
-        except ValueError as e:
+        except (ValueError, IndexError) as e:
             if any([x.startswith("All_") for x in res]):
                 return list(self.operation_object.agg_dict.values())[0][0]
             # It is also possible that we get names that don't include the aggregation function, but are still

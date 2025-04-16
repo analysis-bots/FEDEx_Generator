@@ -122,7 +122,7 @@ class Filter(Operation.Operation):
         high_correlated_columns = self.get_correlated_attributes()
 
         for attr in self.result_df.columns:
-            if isinstance(attr, str) and (attr.lower() == "index" or attr.lower() == self.attribute.lower() or \
+            if isinstance(attr, str) and (attr.lower() == "index" or (self.attribute is not None and attr.lower() == self.attribute.lower()) or \
                                           self.source_scheme.get(attr, None) == 'i' or attr in high_correlated_columns):
                 continue
             yield attr, DatasetRelation(self.source_df, self.result_df, self.source_name)
