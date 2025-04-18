@@ -121,11 +121,18 @@ class Filter(Operation.Operation):
         """
         high_correlated_columns = self.get_correlated_attributes()
 
-        for attr in self.result_df.columns:
-            if isinstance(attr, str) and (attr.lower() == "index" or (self.attribute is not None and attr.lower() == self.attribute.lower()) or \
-                                          self.source_scheme.get(attr, None) == 'i' or attr in high_correlated_columns):
-                continue
-            yield attr, DatasetRelation(self.source_df, self.result_df, self.source_name)
+        # Series does not have columns, so if we get here with a series and don't do this we will get an error.
+        if not isinstance(self.result_df, pd.Series):
+            for attr in self.result_df.columns:
+                if isinstance(attr, str) and (attr.lower() == "index" or (self.attribute is not None and attr.lower() == self.attribute.lower()) or \
+                                              self.source_scheme.get(attr, None) == 'i' or attr in high_correlated_columns):
+                    continue
+                yield attr, DatasetRelation(self.source_df, self.result_df, self.source_name)
+        else:
+            # If we are here, we are dealing with a series.
+            if self.attribute is not None and self.attribute.lower() == self.result_df.name.lower():
+                return
+            yield self.result_df.name, DatasetRelation(self.source_df, self.result_df, self.source_name)
 
     def get_source_col(self, filter_attr, filter_values, bins) -> pd.Series | None:
         """
