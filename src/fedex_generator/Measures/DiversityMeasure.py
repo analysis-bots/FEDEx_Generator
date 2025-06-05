@@ -352,10 +352,12 @@ class DiversityMeasure(BaseMeasure):
             # Get the indexes of the top items, in order of the top items
             for item in top_items:
                 indexes.extend(columns[columns == item].index)
+        columns_backup = columns.copy()
         # Using the indexes in this way will automatically sort the columns such that their order matches that
         # of the top items
         columns = columns.loc[indexes]
         columns = columns[:self.MAX_BARS]
+        cols_dtype_is_numeric = utils.is_numeric(columns)
 
         # If the max value is not in the columns, add it to the columns
         if not isinstance(max_group_value, list):
@@ -367,7 +369,13 @@ class DiversityMeasure(BaseMeasure):
                 columns = columns.sort_index()
             for value in max_group_value:
                 if value not in columns:
-                    columns = columns.append(pd.Series(max_value, index=[value]))
+                    # If the max value is the same dtype as the columns, we can append it directly
+                    if cols_dtype_is_numeric and type(value) in (int, float):
+                        columns = columns._append(pd.Series(max_value, index=[value]))
+                    # Else, retrieve the value from the columns_backup, which is guaranteed to have the value
+                    else:
+                        value_to_add = columns_backup.loc[value]
+                        columns = columns._append(pd.Series(value_to_add, index=[value]))
 
         return columns
 
