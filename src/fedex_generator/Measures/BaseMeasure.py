@@ -417,7 +417,7 @@ class BaseMeasure(object):
 
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
                       influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None)\
-            -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure] | List[str] | None:
+            -> tuple[list[str], plt.Figure] | None:
         """
         Draws the figures for the explanations.
         :param title: The title of the plot.
@@ -436,9 +436,11 @@ class BaseMeasure(object):
         # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
         title = title if title else self.build_operation_expression(source_name)
 
-        # If K is greater than 1,
+        num_explanations = len(explanations) if explanations is not None else 0
+
+        # If K is greater than 1, and there actually is more than one explanation, we need to set up a grid of subplots.
         # set the number of rows in the plot to the ceiling of the length of the scores divided by figs_in_row.
-        if K > 1:  ###
+        if K > 1 and num_explanations > 1:  ###
             rows = math.ceil(len(scores) / figs_in_row)
             fig, axes = plt.subplots(rows, figs_in_row, figsize=(8 * figs_in_row, 9 * rows))
             for ax in axes.reshape(-1):
@@ -447,7 +449,7 @@ class BaseMeasure(object):
             total_text_len = 0
             if title:
                 total_text_len += len(title)
-            if explanations is not None and len(explanations) > 0:
+            if explanations is not None and num_explanations > 0:
                 total_text_len += len(explanations.iloc[0])
             # If the text is so long that it probably won't fit properly in the figure, increase the figure size.
             # Note that 300 is a fairly arbitrary threshold, made on an educated guess that the usual is around
@@ -460,12 +462,17 @@ class BaseMeasure(object):
 
         fig.suptitle(title, fontsize=20, y=1.02)
 
+        if num_explanations > 1:
+            axes = axes.flatten()  # Flatten the axes array for easier indexing.
+        else:
+            axes = [axes]
+
         # Draw the bar plots for each explanation
         for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
                 zip(explanations, bins, influence_vals, scores)):
 
             figure = self.draw_bar(current_bin, current_influence_vals, title=explanation,
-                                ax=axes.reshape(-1)[index] if K > 1 else axes, score=score,
+                                ax=axes[index], score=score,
                                 show_scores=show_scores)  ###
             if figure:
                 figures.append(figure)
@@ -473,7 +480,7 @@ class BaseMeasure(object):
         if added_text is not None:
             # Draw the figure to establish precise bounding boxes
             plt.draw()
-            for explanation, ax in zip(explanations, axes.reshape(-1)):
+            for explanation, ax in zip(explanations, axes):
                 renderer = ax.figure.canvas.get_renderer()
                 max_label_height = 0
 
@@ -522,7 +529,7 @@ class BaseMeasure(object):
         plt.subplots_adjust(top=0.92)
         plt.tight_layout()
 
-        return figures if len(figures) > 0 else figure
+        return figures, fig
 
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
