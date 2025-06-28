@@ -48,7 +48,7 @@ class GroupBy(Operation.Operation):
             self.result_name = utils.get_calling_params_name(result_df)
 
         self._column_mapping = column_mapping
-
+        self._measure = None
 
     def iterate_attributes(self) -> Generator[Tuple[str, DatasetRelation], None, None]:
         """
@@ -67,12 +67,14 @@ class GroupBy(Operation.Operation):
     def get_source_col(self, filter_attr, filter_values, bins):
         return None
 
-    def explain(self, schema: dict=None, attributes: List[str]=None, top_k: int=TOP_K_DEFAULT, explainer: str='fedex',
+    def explain(self, schema: dict = None, attributes: List[str] = None, top_k: int = TOP_K_DEFAULT,
+                explainer: str = 'fedex',
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, consider='right', cont=None, attr=None, ignore=[],
                 use_sampling=True, sample_size: int | float = Operation.SAMPLE_SIZE,
-                debug_mode: bool = False
-                ):
+                debug_mode: bool = False, draw_figures: bool = True, return_scores: bool = False,
+                measure_only: bool = False
+                ) -> (None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple):
         """
         Explain for group by operation
         :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
@@ -85,6 +87,7 @@ class GroupBy(Operation.Operation):
         :param use_sampling: whether to use sampling for the explanation.
         :param sample_size: the sample size to use when sampling the data. Can be an integer or a float between 0 and 1. Default is 5000.
         :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False. Can possibly add more debug options in the future.
+        :param draw_figures: Whether or not to draw the figures in this stage. Defaults to True. Set to False if you want to draw the figures later.
 
         :return: explain figures
         """
@@ -94,23 +97,41 @@ class GroupBy(Operation.Operation):
         if attributes is None:
             attributes = []
 
-
         backup_source_df, backup_res_df = None, None
         if use_sampling:
             backup_source_df, backup_res_df = self.source_df, self.result_df
-            self.source_df, self.result_df = self.sample(self.source_df, sample_size), self.sample(self.result_df, sample_size)
+            self.source_df, self.result_df = self.sample(self.source_df, sample_size), self.sample(self.result_df,
+                                                                                                   sample_size)
 
         # Unless the outlier explainer is used, the diversity measure is always used for the groupby operation.
         measure = DiversityMeasure()
+        self._measure = measure
         scores = measure.calc_measure(self, schema, attributes, ignore=ignore, unsampled_source_df=backup_source_df,
-                                      unsampled_res_df=backup_res_df, column_mapping=self._column_mapping, debug_mode=debug_mode)
-        figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
-                                         show_scores=show_scores, title=title, debug_mode=debug_mode)
+                                      unsampled_res_df=backup_res_df, column_mapping=self._column_mapping,
+                                      debug_mode=debug_mode)
 
         if use_sampling:
             self.source_df, self.result_df = backup_source_df, backup_res_df
 
-        return figures
+        if measure_only:
+            return scores
+
+        ret_val = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+                                          show_scores=show_scores, title=title, debug_mode=debug_mode,
+                                          draw_figures=draw_figures)
+        if return_scores:
+            return ret_val, scores
+        else:
+            return ret_val, None
+
+
+    def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
+                      influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None) -> tuple:
+        return self._measure.draw_figures(
+            title=title, scores=scores, K=K, figs_in_row=figs_in_row,
+            explanations=explanations, bins=bins, influence_vals=influence_vals,
+            source_name=source_name, show_scores=show_scores, added_text=added_text
+        )
 
     @staticmethod
     def get_one_to_many_attributes(df, group_attributes):

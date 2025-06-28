@@ -51,11 +51,11 @@ class Filter(Operation.Operation):
         self.not_presented = {}
         self.corr = self.source_df.corr(numeric_only=True)
         self.type = 'filter'
+        self.operation_str = operation_str
+        self.value = value
 
         # If the result_df is not given, we calculate it.
         if result_df is None:
-            self.operation_str = operation_str
-            self.value = value
             self.result_df = self.source_df[do_operation(self.source_df[attribute], value, operation_str)]
         else:
             self.result_df = result_df
@@ -63,6 +63,7 @@ class Filter(Operation.Operation):
 
         self.source_name = utils.get_calling_params_name(source_df)
         self._high_correlated_columns = None
+        self._measure = None
 
     def get_correlated_attributes(self) -> List[str]:
         """
@@ -120,11 +121,18 @@ class Filter(Operation.Operation):
         """
         high_correlated_columns = self.get_correlated_attributes()
 
-        for attr in self.result_df.columns:
-            if isinstance(attr, str) and (attr.lower() == "index" or attr.lower() == self.attribute.lower() or \
-                    self.source_scheme.get(attr, None) == 'i' or attr in high_correlated_columns):
-                continue
-            yield attr, DatasetRelation(self.source_df, self.result_df, self.source_name)
+        # Series does not have columns, so if we get here with a series and don't do this we will get an error.
+        if not isinstance(self.result_df, pd.Series):
+            for attr in self.result_df.columns:
+                if isinstance(attr, str) and (attr.lower() == "index" or (self.attribute is not None and attr.lower() == self.attribute.lower()) or \
+                                              self.source_scheme.get(attr, None) == 'i' or attr in high_correlated_columns):
+                    continue
+                yield attr, DatasetRelation(self.source_df, self.result_df, self.source_name)
+        else:
+            # If we are here, we are dealing with a series.
+            if self.attribute is not None and self.attribute.lower() == self.result_df.name.lower():
+                return
+            yield self.result_df.name, DatasetRelation(self.source_df, self.result_df, self.source_name)
 
     def get_source_col(self, filter_attr, filter_values, bins) -> pd.Series | None:
         """
@@ -149,7 +157,9 @@ class Filter(Operation.Operation):
     def explain(self, schema=None, attributes=None, top_k=TOP_K_DEFAULT,
                 figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
                 corr_TH: float = 0.7, explainer='fedex', consider='right', cont=None, attr=None, ignore=[],
-                use_sampling: bool = True, sample_size = Operation.SAMPLE_SIZE, debug_mode: bool =False) -> None:
+                use_sampling: bool = True, sample_size=Operation.SAMPLE_SIZE, debug_mode: bool = False,
+                draw_figures: bool = True, return_scores: bool = False, measure_only: bool = False)\
+            -> (None | Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | Tuple):
         """
         Explain for filter operation
 
@@ -168,6 +178,8 @@ class Filter(Operation.Operation):
         :param use_sampling: Whether to use sampling to speed up the generation of explanations.
         :param sample_size: The sample size to use when using sampling. Can be a number or a percentage of the dataframe size. Default is 5000.
         :param debug_mode: Developer option for debugging. Disables multiprocessing when enabled. Can also be used to print additional information. Default is False.
+        :param draw_figures: Whether to draw the figures at this stage, or to return the raw explanations, to be drawn later with potentially more added to them. Default is True.
+        :param return_scores: Whether to return the scores of the measure or not. Default is False.
 
         :return: explain figures
         """
@@ -175,7 +187,8 @@ class Filter(Operation.Operation):
 
         if use_sampling:
             source_df_backup, result_df_backup = self.source_df, self.result_df
-            self.source_df, self.result_df = self.sample(self.source_df, sample_size), self.sample(self.result_df, sample_size)
+            self.source_df, self.result_df = self.sample(self.source_df, sample_size), self.sample(self.result_df,
+                                                                                                   sample_size)
 
         if attributes is None:
             attributes = []
@@ -185,20 +198,56 @@ class Filter(Operation.Operation):
 
         # The measure used for filer operations is always the ExceptionalityMeasure.
         measure = ExceptionalityMeasure()
+        self._measure = measure
         scores = measure.calc_measure(self, schema, attributes, unsampled_source_df=source_df_backup,
                                       unsampled_res_df=result_df_backup, debug_mode=debug_mode)
-
-        self.delete_correlated_atts(measure, TH=corr_TH)
-        # Get the explanation figures.
-        figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
-                                         show_scores=show_scores, title=title, debug_mode=debug_mode)
-        if figures:
-            self.correlated_notes(figures, top_k)
 
         if use_sampling:
             self.source_df, self.result_df = source_df_backup, result_df_backup
 
-        return None
+        if measure_only:
+            return scores
+
+        self.delete_correlated_atts(measure, TH=corr_TH)
+        if draw_figures:
+            # Get the explanation figures.
+            figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+                                             show_scores=show_scores, title=title, debug_mode=debug_mode,
+                                             draw_figures=draw_figures)
+            if figures:
+                self.correlated_notes(figures, top_k)
+
+        else:
+
+            ret_val = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+                                          show_scores=show_scores, title=title, debug_mode=debug_mode,
+                                          draw_figures=draw_figures)
+            if return_scores:
+                return ret_val, scores
+            else:
+                return ret_val, None
+
+        if not return_scores:
+            return None, None
+        else:
+            return None, scores
+
+    def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series,
+                     bins: pd.Series,
+                     influence_vals: pd.Series, source_name: str, show_scores: bool,
+                     added_text: dict | None = None) -> tuple:
+        if self._measure is None:
+            raise ValueError(
+                "The explain method must be called first before drawing the figures via the draw_figures method.")
+        figures, fig = self._measure.draw_figures(
+            title=title, scores=scores, K=K, figs_in_row=figs_in_row,
+            explanations=explanations, bins=bins, influence_vals=influence_vals,
+            source_name=source_name, show_scores=show_scores, added_text=added_text
+        )
+        if figures:
+            self.correlated_notes(figures, K)
+
+        return figures, fig
 
     def present_deleted_correlated(self, figs_in_row: int = DEFAULT_FIGS_IN_ROW):
         """

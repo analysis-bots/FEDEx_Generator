@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import rc
 import numpy as np
 import pandas as pd
+from matplotlib.figure import Figure
 from paretoset import paretoset
 
 from fedex_generator.Measures.Bins import Bins, Bin
@@ -328,6 +329,21 @@ class BaseMeasure(object):
         max_influences = influence_vals_max_indexes[-k:][::-1]
         return max_indices, max_influences
 
+
+
+    def _try_fix_explanation(self, explanation: str, binned_column: pd.Series, max_value) -> str:
+        """
+        If the explanation is not valid, for example in the case of group-bys where we have a value instead
+        of the group names, try to fix it.
+        Override this method in the inheriting class if needed, otherwise leave as is (returns the explanation as is).
+        :param explanation: The explanation to fix.
+        :param binned_column: The binned column.
+        :param max_value: The max value of the bin.
+        :param max_group_value: The group with the max value.
+        :return:
+        """
+        return explanation
+
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title: str = None, ax=None, score=None,
                  show_scores: bool = False) -> None:
         """
@@ -387,6 +403,7 @@ class BaseMeasure(object):
                 if significance < SIGNIFICANCE_THRESHOLD:
                     continue
                 explanation = self.build_explanation(current_bin, max_col_name, max_value, source_name)
+                explanation = self._try_fix_explanation(explanation, current_bin, max_value)
 
                 # Save the results in a dictionary and append it to the results dataframe.
                 new_result = dict(zip(results_columns,
@@ -398,10 +415,127 @@ class BaseMeasure(object):
         return results
 
 
+    def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
+                      influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None)\
+            -> tuple[list[str], plt.Figure] | None:
+        """
+        Draws the figures for the explanations.
+        :param title: The title of the plot.
+        :param scores: The scores of the attributes.
+        :param K: The number of top attributes to consider.
+        :param figs_in_row: The number of figures to display in a row.
+        :param explanations: The explanations generated for the top K attributes.
+        :param bins: The bins of the attributes.
+        :param influence_vals: The influence values of the attributes.
+        :param source_name: The name of the source DataFrame.
+        :param show_scores: Whether to show the scores on the plot.
+        :param added_text: Additional text to add to the bottom of each figure. Optional. A dict with explanation as key, and a sub-dict with 'text' and 'position' as keys.
+        :return: A list of matplotlib figures containing the explanations for the top k attributes, after computing the influence.
+        """
+        figures = []
+        # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
+        title = title if title else self.build_operation_expression(source_name)
+
+        num_explanations = len(explanations) if explanations is not None else 0
+
+        # If K is greater than 1, and there actually is more than one explanation, we need to set up a grid of subplots.
+        # set the number of rows in the plot to the ceiling of the length of the scores divided by figs_in_row.
+        if K > 1 and num_explanations > 1:  ###
+            rows = math.ceil(len(scores) / figs_in_row)
+            fig, axes = plt.subplots(rows, figs_in_row, figsize=(8 * figs_in_row, 9 * rows))
+            for ax in axes.reshape(-1):
+                ax.set_axis_off()
+        else:
+            total_text_len = 0
+            if title:
+                total_text_len += len(title)
+            if explanations is not None and num_explanations > 0:
+                total_text_len += len(explanations.iloc[0])
+            # If the text is so long that it probably won't fit properly in the figure, increase the figure size.
+            # Note that 300 is a fairly arbitrary threshold, made on an educated guess that the usual is around
+            # 150-250 characters long, and that 300+ is probably around where it starts to get too long.
+            if total_text_len > 300:
+                fig, axes = plt.subplots(figsize=(9, 11))
+            # Otherwise, use a smaller figure size.
+            else:
+                fig, axes = plt.subplots(figsize=(5, 6))
+
+        fig.suptitle(title, fontsize=20, y=1.02)
+
+        if num_explanations > 1:
+            axes = axes.flatten()  # Flatten the axes array for easier indexing.
+        else:
+            axes = [axes]
+
+        # Draw the bar plots for each explanation
+        for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
+                zip(explanations, bins, influence_vals, scores)):
+
+            figure = self.draw_bar(current_bin, current_influence_vals, title=explanation,
+                                ax=axes[index], score=score,
+                                show_scores=show_scores)  ###
+            if figure:
+                figures.append(figure)
+
+        if added_text is not None:
+            # Draw the figure to establish precise bounding boxes
+            plt.draw()
+            for explanation, ax in zip(explanations, axes):
+                renderer = ax.figure.canvas.get_renderer()
+                max_label_height = 0
+
+                # Check all x-tick labels plus the x-axis label itself to find the maximum height
+                for label in ax.get_xticklabels() + [ax.xaxis.get_label()]:
+                    bbox = label.get_window_extent(renderer=renderer)
+                    if bbox.height > max_label_height:
+                        max_label_height = bbox.height
+
+
+
+                # Add a little bit of padding
+                added_text_dict = added_text[explanation]
+                text = added_text_dict["added_text"]
+                position = added_text_dict["position"]
+
+                if position == "bottom":
+                    offset_in_points = -(max_label_height + 10)
+
+                    ax.annotate(
+                        text,
+                        xy=(0.5, 0),  # anchor at the bottom of the axes
+                        xycoords='axes fraction',
+                        xytext=(0, offset_in_points),
+                        textcoords='offset points',
+                        ha='center', va='top',
+                        fontsize=16
+                    )
+                elif position == "top":
+                    offset_in_points = max_label_height + 10
+
+                    ax.annotate(
+                        text,
+                        xy=(0.5, 1),  # anchor at the top of the axes
+                        xycoords='axes fraction',
+                        xytext=(0, offset_in_points),
+                        textcoords='offset points',
+                        ha='center', va='bottom',
+                        fontsize=16
+                    )
+
+            # Adding hspace of 1.5 seems to generally give enough space for the added text, without
+            # squishing the plots too much or leaving too much empty space.
+            plt.subplots_adjust(hspace=1.5)
+        # Adding a bit of a top margin to the plot, to make sure the title doesn't interfere with the plots.
+        plt.subplots_adjust(top=0.92)
+        plt.tight_layout()
+
+        return figures, fig
+
     def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
                        figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None,
-                       deleted=None, debug_mode: bool = False
-                       ) -> matplotlib.pyplot.Figure | List[matplotlib.pyplot.Figure] | List[str] | None:
+                       deleted=None, debug_mode: bool = False, draw_figures: bool = True
+                       ) -> Tuple[str, pd.Series, int, int, pd.Series, pd.Series, pd.Series, str, bool] | None | Figure | list[
+        Figure] | list[str]:
         """
         Calculate the influence of each attribute in the dataset.
 
@@ -415,9 +549,11 @@ class BaseMeasure(object):
         :param title: The title of the plot. Optional.
         :param deleted: A dictionary of deleted attributes as keys, with the values as a tuple: (dataframe name, bin object, score, column values). Optional.
         :param debug_mode: Developer option. Disables multiprocessing for easier debugging. Default is False.
+        :param draw_figures: Whether to draw the figures at this stage. Default is True. If set to false, it is the responsibility of the caller to call the draw_figures method. Possible use case for leaving this false is if the caller wants to add additional information to the figures before drawing them.
 
         :return: A list (or a single) matplotlib figures containing the explanations for the top k attributes, after
         computing the influence. Alternatively, returns the names of the explained attributes, or None if no explanations were found.
+        If the option draw_figures is set to False, returns a tuple containing the parameters needed to draw the figures instead.
         """
 
         # If deleted is not None, set the score dictionary to the deleted dictionary.
@@ -445,7 +581,6 @@ class BaseMeasure(object):
         # Concatenating an empty dataframe with another dataframe is deprecated, so we initialize it with a single empty row.
         # This row will be dropped later.
         results = pd.DataFrame([["", "","","","",""]], columns=results_columns)
-        figures = []
 
         # Iterate over the top K attributes, and get the influence values for each bin.
         # From limited testing, doing this in parallel gives a small performance boost.
@@ -478,49 +613,25 @@ class BaseMeasure(object):
         # If there are no interesting explanations, print a message and return.
         if len(scores) == 0:
             print(f'Could not find any interesting explanations for your query over dataset {source_name}.')
-            return
+            return None
 
-        # Set the title of the plot to the title if it is not None, otherwise build the operation expression.
-        title = title if title else self.build_operation_expression(source_name)
-
-        # If K is greater than 1,
-        # set the number of rows in the plot to the ceiling of the length of the scores divided by figs_in_row.
-        if K > 1:  ###
-            rows = math.ceil(len(scores) / figs_in_row)
-            fig, axes = plt.subplots(rows, figs_in_row, figsize=(7 * figs_in_row, 8 * rows))
-            for ax in axes.reshape(-1):
-                ax.set_axis_off()
+        if draw_figures:
+            figures = self.draw_figures(
+                title=title,
+                scores=scores,
+                K=K,
+                figs_in_row=figs_in_row,
+                explanations=explanations,
+                bins=bins,
+                influence_vals=influence_vals,
+                source_name=source_name,
+                show_scores=show_scores,
+            )
         else:
-            total_text_len = 0
-            if title:
-                total_text_len += len(title)
-            if explanations is not None and len(explanations) > 0:
-                total_text_len += len(explanations.iloc[0])
-            # If the text is so long that it probably won't fit properly in the figure, increase the figure size.
-            # Note that 300 is a fairly arbitrary threshold, made on an educated guess that the usual is around
-            # 150-250 characters long, and that 300+ is probably around where it starts to get too long.
-            if total_text_len > 300:
-                fig, axes = plt.subplots(figsize=(9, 11))
-            # Otherwise, use a smaller figure size.
-            else:
-                fig, axes = plt.subplots(figsize=(5, 6))
-
-        fig.suptitle(title, fontsize=20)
-
-        # Draw the bar plots for each explanation
-        for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
-                zip(explanations, bins, influence_vals, scores)):
-
-            fig = self.draw_bar(current_bin, current_influence_vals, title=explanation,
-                                ax=axes.reshape(-1)[index] if K > 1 else axes, score=score,
-                                show_scores=show_scores)  ###
-            if fig:
-                figures.append(fig)
-
-        plt.tight_layout()
+            return title, scores, K, figs_in_row, explanations, bins, influence_vals, source_name, show_scores
 
         # Return the figures if there are multiple figures, otherwise return a single figure.
-        return figures if len(figures) > 0 else fig
+        return figures
 
     def calc_interestingness_only(self) -> None:
         """

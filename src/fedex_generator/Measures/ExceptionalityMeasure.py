@@ -170,8 +170,13 @@ class ExceptionalityMeasure(BaseMeasure):
         from fedex_generator.Operations.Join import Join
 
         if isinstance(self.operation_object, Filter):
-            return f'Dataframe {self.operation_object.source_name}, ' \
-                   f'filtered on attribute {self.operation_object.attribute}'
+            if self.operation_object.value is not None and self.operation_object.operation_str is not None:
+                return f'Dataframe {self.operation_object.source_name}, ' \
+                       f'filtered on attribute {self.operation_object.attribute} ' \
+                       f'{self.operation_object.operation_str} {self.operation_object.value}'
+            else:
+                return f'Dataframe {self.operation_object.source_name}, ' \
+                       f'filtered on attribute {self.operation_object.attribute}'
         elif isinstance(self.operation_object, Join):
             return f'{self.operation_object.right_name} joined with {self.operation_object.left_name} by {self.operation_object.attribute}'
 
