@@ -100,6 +100,10 @@ class ExceptionalityMeasure(BaseMeasure):
             else:
                 ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
+        # Rotate the x-axis labels by 45 degrees if there are more than 8 labels
+        if len(labels) > 8:
+            ax.tick_params(axis='x', rotation=45, tickdir='in')
+
         ax.set_axis_on()
         return bin_item.get_bin_name()  ####
 

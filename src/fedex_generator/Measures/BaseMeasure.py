@@ -459,9 +459,18 @@ class BaseMeasure(object):
                 fig, axes = plt.subplots(figsize=(9, 11))
             # Otherwise, use a smaller figure size.
             else:
-                fig, axes = plt.subplots(figsize=(5, 6))
+                fig, axes = plt.subplots(figsize=(7, 8))
 
-        fig.suptitle(title, fontsize=20, y=1.02)
+        # There are issues of the title not being properly centered when there is only one explanation,
+        # so we need to check if there is only one explanation, and if so, set the title to be centered.
+        if num_explanations == 1:
+            # Why does x=0.6 work? I don't know, but it does and it centers the title properly.
+            # Not 0.5, for some reason beyond my understanding.
+            fig.suptitle(title, fontsize=15, y=1.02, x=0.6)
+            axes.set_title(explanations.iloc[0], fontsize=16)
+            axes.set_axis_off()
+        else:
+            fig.suptitle(title, fontsize=20, y=1.02)
 
         if num_explanations > 1:
             axes = axes.flatten()  # Flatten the axes array for easier indexing.
@@ -474,7 +483,7 @@ class BaseMeasure(object):
         for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
                 zip(explanations, bins, influence_vals, scores)):
 
-            explanation_num = index + 1 if num_explanations > 1 else None
+            explanation_num = index + 1 if (num_explanations > 1 and added_text is not None) else None
 
             figure = self.draw_bar(current_bin, current_influence_vals, title=explanation,
                                 ax=axes[index], score=score,
