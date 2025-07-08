@@ -206,7 +206,7 @@ class DiversityMeasure(BaseMeasure):
         # return list(self.operation_object.agg_dict.values())[0][aggregation_index]
 
     def draw_bar(self, bin_item: MultiIndexBin, influence_vals: dict = None, title=None, ax=None, score=None,
-                 show_scores: bool = False):
+                 show_scores: bool = False, explanation_num: int | None = None):
         """
         Draw a bar chart for a given bin item with optional features.
 
@@ -219,6 +219,7 @@ class DiversityMeasure(BaseMeasure):
         :param ax: Optional; the matplotlib axes object to draw the bar chart on.
         :param score: Optional; the score to be displayed in the title if `show_scores` is True.
         :param show_scores: Optional; a boolean indicating whether to display the score in the title (default is False).
+        :param explanation_num: Optional; an integer representing the explanation number to be included in the title.
         """
         try:
             # Get the index of the maximum value and its influence
@@ -258,6 +259,8 @@ class DiversityMeasure(BaseMeasure):
 
             # Get the aggregated values for the labels, and draw the bar chart
             aggregate_column = [aggregated_result.get(item, 0) for item in labels]
+            if explanation_num is not None:
+                title = f"{START_BOLD}[{explanation_num}]{END_BOLD} {title}" if title else f"{START_BOLD}[{explanation_num}]{END_BOLD}"
             if show_scores:
                 ax.set_title(f'score: {score}\n{utils.to_valid_latex(title)}', fontdict={'fontsize': 10})
             else:
@@ -278,6 +281,8 @@ class DiversityMeasure(BaseMeasure):
                 columns = self._select_top_columns(influence_vals, columns, max_value, max_group_value)
 
             title = self._fix_explanation(title, columns, max_value, max_group_value)
+            if explanation_num is not None:
+                title = f"{START_BOLD}[{explanation_num}]{END_BOLD} {title}" if title else f"{START_BOLD}[{explanation_num}]{END_BOLD}"
             ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
 
             draw_bar(list(columns.index),
