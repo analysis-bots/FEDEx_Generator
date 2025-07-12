@@ -273,7 +273,7 @@ class DiversityMeasure(BaseMeasure):
 
             # Rotate the x-axis labels for better readability, if there are over 8 labels
             if len(labels) > 8:
-                ax.set_xticklabels(labels, rotation=45, tickdir='in')
+                ax.tick_params(axis='x', rotation=45, tickdir='in')
 
         except Exception as e:
             # In the case of an exception, draw a bar chart using the draw_bar method defined outside the class
@@ -299,7 +299,7 @@ class DiversityMeasure(BaseMeasure):
 
             # Rotate the x-axis labels for better readability, if there are over 8 labels
             if len(columns) > 8:
-                ax.set_xticklabels(columns.index, rotation=45, tickdir='in')
+                ax.tick_params(axis='x', rotation=45, tickdir='in')
             ax.set_axis_on()
 
 
