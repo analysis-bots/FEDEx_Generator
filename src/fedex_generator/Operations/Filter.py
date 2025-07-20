@@ -245,7 +245,7 @@ class Filter(Operation.Operation):
             source_name=source_name, show_scores=show_scores, added_text=added_text
         )
         if figures:
-            self.correlated_notes(figures, K)
+            self.correlated_notes(figures, K, added_text_exists= added_text is not None)
 
         return figures, fig
 
@@ -264,7 +264,7 @@ class Filter(Operation.Operation):
         measure = ExceptionalityMeasure()
         measure.calc_influence(deleted=self.not_presented, figs_in_row=figs_in_row)
 
-    def correlated_notes(self, figures, top_k) -> None:
+    def correlated_notes(self, figures, top_k, added_text_exists: bool = False) -> None:
         """
         Add notes about correlated attributes to the figures.
 
@@ -274,6 +274,8 @@ class Filter(Operation.Operation):
 
         :param figures: The list of figures to add notes to.
         :param top_k: The number of top attributes to consider.
+        :param added_text_exists: A flag indicating whether additional text has been added to the figures. If yes, the
+        notes will be added below the existing text. Default is False.
         """
         txt = ""
         lentxt = 0
@@ -293,7 +295,11 @@ class Filter(Operation.Operation):
             txt += "\nIn order to view the not presented attributes, please execute the following: df.present_deleted_correlated()"
 
         # Add the notes to the figures and show them.
-        plt.figtext(0, 0, txt, horizontalalignment='left', verticalalignment='top')
+        if not added_text_exists:
+            plt.figtext(0, 0, txt, horizontalalignment='left', verticalalignment='top')
+        else:
+            # If there is already text added, we add the notes below the existing text.
+            plt.figtext(0, -0.07 * (lentxt + 1), txt, horizontalalignment='left', verticalalignment='top', fontsize=16)
 
     def delete_correlated_atts(self, measure, TH=0.7):
         """

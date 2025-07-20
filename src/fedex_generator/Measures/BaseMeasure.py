@@ -345,7 +345,7 @@ class BaseMeasure(object):
         return explanation
 
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title: str = None, ax=None, score=None,
-                 show_scores: bool = False) -> None:
+                 show_scores: bool = False, explanation_num: int | None = None) -> None:
         """
         Draw a bar plot for the given bin item and influence values.
         This is an abstract method, and should be implemented by the inheriting class.
@@ -355,6 +355,7 @@ class BaseMeasure(object):
         :param ax: The axes to draw the plot on. Optional.
         :param score: The score of the bin item. Optional.
         :param show_scores: Whether to show the scores on the plot. Optional.
+        :param explanation_num: The explanation number to display in the title. Optional.
         """
         raise NotImplementedError()
 
@@ -458,73 +459,60 @@ class BaseMeasure(object):
                 fig, axes = plt.subplots(figsize=(9, 11))
             # Otherwise, use a smaller figure size.
             else:
-                fig, axes = plt.subplots(figsize=(5, 6))
+                fig, axes = plt.subplots(figsize=(7, 8))
 
-        fig.suptitle(title, fontsize=20, y=1.02)
+        # There are issues of the title not being properly centered when there is only one explanation,
+        # so we need to check if there is only one explanation, and if so, set the title to be centered.
+        if num_explanations == 1:
+            # Why does x=0.6 work? I don't know, but it does and it centers the title properly.
+            # Not 0.5, for some reason beyond my understanding.
+            fig.suptitle(title, fontsize=15, y=1.02, x=0.6)
+            axes.set_title(explanations.iloc[0], fontsize=16)
+            axes.set_axis_off()
+        else:
+            fig.suptitle(title, fontsize=20, y=1.02)
 
         if num_explanations > 1:
             axes = axes.flatten()  # Flatten the axes array for easier indexing.
         else:
             axes = [axes]
 
+        added_text_text = ""
+
         # Draw the bar plots for each explanation
         for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
                 zip(explanations, bins, influence_vals, scores)):
 
+            explanation_num = index + 1 if (num_explanations > 1 and added_text is not None) else None
+
             figure = self.draw_bar(current_bin, current_influence_vals, title=explanation,
                                 ax=axes[index], score=score,
-                                show_scores=show_scores)  ###
+                                show_scores=show_scores,
+                                explanation_num=explanation_num
+                                   )
             if figure:
                 figures.append(figure)
 
-        if added_text is not None:
-            # Draw the figure to establish precise bounding boxes
-            plt.draw()
-            for explanation, ax in zip(explanations, axes):
-                renderer = ax.figure.canvas.get_renderer()
-                max_label_height = 0
+            if added_text is not None:
+                explanation_added_text = added_text.get(explanation, None)
+                if explanation_added_text is not None:
+                    explanation_added_text = explanation_added_text.get('added_text', "")
+                    if not isinstance(explanation_added_text, str):
+                        explanation_added_text = str(explanation_added_text)
+                    # Replace any wrapping done previously - we want our own custom wrapping here, since we know
+                    # what length of text we want to display.
+                    explanation_added_text = explanation_added_text.replace("\n", " ")
+                    if explanation_num is not None:
+                        added_text_text += f"{START_BOLD}[{explanation_num}]{END_BOLD} {explanation_added_text}\n\n"
+                    else:
+                        added_text_text += f"{explanation_added_text}\n\n"
 
-                # Check all x-tick labels plus the x-axis label itself to find the maximum height
-                for label in ax.get_xticklabels() + [ax.xaxis.get_label()]:
-                    bbox = label.get_window_extent(renderer=renderer)
-                    if bbox.height > max_label_height:
-                        max_label_height = bbox.height
 
+        # If there is text to add, add it to the bottom left of the plot.
+        if added_text_text:
+            plt.figtext(0, 0, added_text_text, horizontalalignment='left', verticalalignment='top',
+                        fontsize=16, wrap=True,)
 
-
-                # Add a little bit of padding
-                added_text_dict = added_text[explanation]
-                text = added_text_dict["added_text"]
-                position = added_text_dict["position"]
-
-                if position == "bottom":
-                    offset_in_points = -(max_label_height + 10)
-
-                    ax.annotate(
-                        text,
-                        xy=(0.5, 0),  # anchor at the bottom of the axes
-                        xycoords='axes fraction',
-                        xytext=(0, offset_in_points),
-                        textcoords='offset points',
-                        ha='center', va='top',
-                        fontsize=16
-                    )
-                elif position == "top":
-                    offset_in_points = max_label_height + 10
-
-                    ax.annotate(
-                        text,
-                        xy=(0.5, 1),  # anchor at the top of the axes
-                        xycoords='axes fraction',
-                        xytext=(0, offset_in_points),
-                        textcoords='offset points',
-                        ha='center', va='bottom',
-                        fontsize=16
-                    )
-
-            # Adding hspace of 1.5 seems to generally give enough space for the added text, without
-            # squishing the plots too much or leaving too much empty space.
-            plt.subplots_adjust(hspace=1.5)
         # Adding a bit of a top margin to the plot, to make sure the title doesn't interfere with the plots.
         plt.subplots_adjust(top=0.92)
         plt.tight_layout()

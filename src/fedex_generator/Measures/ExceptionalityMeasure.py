@@ -33,7 +33,7 @@ class ExceptionalityMeasure(BaseMeasure):
         super().__init__()
 
     def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title=None, ax=None, score=None,
-                 show_scores: bool = False) -> str:
+                 show_scores: bool = False, explanation_num: int | None = None) -> str:
         """
         Draw a bar chart comparing the distribution of values before and after an operation.
 
@@ -92,11 +92,17 @@ class ExceptionalityMeasure(BaseMeasure):
         ax.set_ylabel("frequency(\\%)", fontsize=16)
 
         # Set the title of the bar chart. If show_scores is True, display the score in the title
+        if explanation_num is not None:
+            title = f"{START_BOLD}[{explanation_num}]{END_BOLD} {title}" if title is not None else f"{START_BOLD}[{explanation_num}]{END_BOLD}"
         if title is not None:
             if show_scores:
                 ax.set_title(f'score: {score}\n {utils.to_valid_latex(title)}', fontdict={'fontsize': 20})
             else:
                 ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 20})
+
+        # Rotate the x-axis labels by 45 degrees if there are more than 8 labels
+        if len(labels) > 8:
+            ax.tick_params(axis='x', rotation=45, tickdir='in')
 
         ax.set_axis_on()
         return bin_item.get_bin_name()  ####
