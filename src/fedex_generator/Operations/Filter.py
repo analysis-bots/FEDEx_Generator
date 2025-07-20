@@ -299,7 +299,7 @@ class Filter(Operation.Operation):
             plt.figtext(0, 0, txt, horizontalalignment='left', verticalalignment='top')
         else:
             # If there is already text added, we add the notes below the existing text.
-            plt.figtext(0, -0.05 * (lentxt + 1), txt, horizontalalignment='left', verticalalignment='top')
+            plt.figtext(0, -0.07 * (lentxt + 1), txt, horizontalalignment='left', verticalalignment='top', fontsize=16)
 
     def delete_correlated_atts(self, measure, TH=0.7):
         """
