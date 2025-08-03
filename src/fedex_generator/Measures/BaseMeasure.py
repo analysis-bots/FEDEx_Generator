@@ -417,7 +417,8 @@ class BaseMeasure(object):
 
 
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
-                      influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None)\
+                      influence_vals: pd.Series, source_name: str, show_scores: bool,
+                     added_text: pd.Series = None, added_text_name: str | None = None)\
             -> tuple[list[str], plt.Figure] | None:
         """
         Draws the figures for the explanations.
@@ -431,6 +432,7 @@ class BaseMeasure(object):
         :param source_name: The name of the source DataFrame.
         :param show_scores: Whether to show the scores on the plot.
         :param added_text: Additional text to add to the bottom of each figure. Optional. A dict with explanation as key, and a sub-dict with 'text' and 'position' as keys.
+        :param added_text_name: The name of the added text, to be displayed right above the added text.
         :return: A list of matplotlib figures containing the explanations for the top k attributes, after computing the influence.
         """
         figures = []
@@ -477,7 +479,7 @@ class BaseMeasure(object):
         else:
             axes = [axes]
 
-        added_text_text = ""
+        added_text_text = f"{added_text_name}:\n\n" if added_text_name else ""
 
         # Draw the bar plots for each explanation
         for index, (explanation, current_bin, current_influence_vals, score) in enumerate(

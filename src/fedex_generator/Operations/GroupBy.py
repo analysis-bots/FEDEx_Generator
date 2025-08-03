@@ -126,11 +126,13 @@ class GroupBy(Operation.Operation):
 
 
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
-                      influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None) -> tuple:
+                      influence_vals: pd.Series, source_name: str, show_scores: bool,
+                     added_text: dict | None = None, added_text_name: str | None = None) -> tuple:
         return self._measure.draw_figures(
             title=title, scores=scores, K=K, figs_in_row=figs_in_row,
             explanations=explanations, bins=bins, influence_vals=influence_vals,
-            source_name=source_name, show_scores=show_scores, added_text=added_text
+            source_name=source_name, show_scores=show_scores, added_text=added_text,
+            added_text_name=added_text_name
         )
 
     @staticmethod
