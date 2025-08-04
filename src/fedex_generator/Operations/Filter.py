@@ -235,17 +235,18 @@ class Filter(Operation.Operation):
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series,
                      bins: pd.Series,
                      influence_vals: pd.Series, source_name: str, show_scores: bool,
-                     added_text: dict | None = None) -> tuple:
+                     added_text: dict | None = None, added_text_name: str | None = None) -> tuple:
         if self._measure is None:
             raise ValueError(
                 "The explain method must be called first before drawing the figures via the draw_figures method.")
         figures, fig = self._measure.draw_figures(
             title=title, scores=scores, K=K, figs_in_row=figs_in_row,
             explanations=explanations, bins=bins, influence_vals=influence_vals,
-            source_name=source_name, show_scores=show_scores, added_text=added_text
+            source_name=source_name, show_scores=show_scores, added_text=added_text,
+            added_text_name=added_text_name
         )
         if figures:
-            self.correlated_notes(figures, K, added_text_exists= added_text is not None)
+            self.correlated_notes(figures, K, added_text = added_text)
 
         return figures, fig
 
@@ -264,7 +265,7 @@ class Filter(Operation.Operation):
         measure = ExceptionalityMeasure()
         measure.calc_influence(deleted=self.not_presented, figs_in_row=figs_in_row)
 
-    def correlated_notes(self, figures, top_k, added_text_exists: bool = False) -> None:
+    def correlated_notes(self, figures, top_k, added_text: dict | None = None) -> None:
         """
         Add notes about correlated attributes to the figures.
 
@@ -274,8 +275,8 @@ class Filter(Operation.Operation):
 
         :param figures: The list of figures to add notes to.
         :param top_k: The number of top attributes to consider.
-        :param added_text_exists: A flag indicating whether additional text has been added to the figures. If yes, the
-        notes will be added below the existing text. Default is False.
+        :param added_text: The additional text that was already added to the figures, if any. If it exists, the notes will be
+        adjusted to be added below the existing text.
         """
         txt = ""
         lentxt = 0
@@ -294,12 +295,18 @@ class Filter(Operation.Operation):
         if lentxt > 0:
             txt += "\nIn order to view the not presented attributes, please execute the following: df.present_deleted_correlated()"
 
-        # Add the notes to the figures and show them.
-        if not added_text_exists:
-            plt.figtext(0, 0, txt, horizontalalignment='left', verticalalignment='top')
-        else:
-            # If there is already text added, we add the notes below the existing text.
-            plt.figtext(0, -0.07 * (lentxt + 1), txt, horizontalalignment='left', verticalalignment='top', fontsize=16)
+            # Add the notes to the figures and show them.
+            if added_text is None:
+                plt.figtext(0, 0, txt, horizontalalignment='left', verticalalignment='top')
+            else:
+                # Add "Notes" to the start of the text if there is already text added.
+                if not txt.startswith("Notes"):
+                    txt = "Notes:\n" + txt
+                added_text_num_lines = len(added_text)
+                # If there is already text added, we add the notes below the existing text.
+                # The extra 0.1 is some extra safety margin, because this is choice of spacing is just a heuristic
+                # born of trial and error.
+                plt.figtext(0, -0.05 * (added_text_num_lines + 0.1), txt, horizontalalignment='left', verticalalignment='top', fontsize=16)
 
     def delete_correlated_atts(self, measure, TH=0.7):
         """

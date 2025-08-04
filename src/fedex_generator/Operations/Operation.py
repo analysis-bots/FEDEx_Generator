@@ -52,7 +52,8 @@ class Operation:
         raise NotImplementedError()
 
     def draw_figures(self, title: str, scores: pd.Series, K: int, figs_in_row: int, explanations: pd.Series, bins: pd.Series,
-                      influence_vals: pd.Series, source_name: str, show_scores: bool, added_text: dict | None = None) -> None:
+                      influence_vals: pd.Series, source_name: str, show_scores: bool,
+                     added_text: dict | None = None, added_text_name: str | None = None) -> None:
         """
         Draws the figures for the explanations.
         :param title: The title of the plot.
@@ -65,6 +66,7 @@ class Operation:
         :param source_name: The name of the source DataFrame.
         :param show_scores: Whether to show the scores on the plot.
         :param added_text: Additional text to add to the bottom of each figure. Optional. A dict with explanation as key, and a sub-dict with 'text' and 'position' as keys.
+        :param added_text_name: The name of the additional text to be displayed. Optional. If provided, it will be displayed above the added text.
         """
         raise NotImplementedError()
 
